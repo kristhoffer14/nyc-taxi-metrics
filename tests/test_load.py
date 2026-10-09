@@ -120,3 +120,14 @@ def test_failed_load_leaves_no_partial_month(tmp_path, files, zone_csv):
     with pytest.raises(duckdb.ConversionException):
         load.load_all(db, {"2024-12": bad}, zone_csv, force=True)
     assert count_rows(db, "source_month = '2024-12'") == 5
+
+
+def test_source_row_is_unique_within_month(tmp_path, files, zone_csv):
+    db = tmp_path / "t.duckdb"
+    load.load_all(db, files, zone_csv)
+    with duckdb.connect(str(db), read_only=True) as con:
+        rows = con.execute(
+            "SELECT source_month, count(*), count(DISTINCT source_row), min(source_row), "
+            "max(source_row) FROM raw.yellow_trips GROUP BY 1 ORDER BY 1"
+        ).fetchall()
+    assert rows == [("2024-12", 5, 5, 1, 5), ("2025-01", 7, 7, 1, 7)]

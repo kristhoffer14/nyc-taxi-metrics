@@ -5,7 +5,8 @@ columns are matched by name case-insensitively (the files change casing,
 e.g. ``Airport_fee``), every column is cast to one fixed type, and
 optional columns missing from a file (``cbd_congestion_fee`` before 2025)
 are filled with NULL. Each row also records the month and file it came
-from, which staging needs to reject pickups outside the file's month.
+from and its 1-based position in that file: staging needs the month to
+reject pickups outside it, and month plus position is the trip key.
 """
 
 from __future__ import annotations
@@ -97,7 +98,8 @@ def _create_raw_schema(con: duckdb.DuckDBPyConnection) -> None:
         CREATE TABLE IF NOT EXISTS raw.yellow_trips (
             {columns},
             source_month VARCHAR NOT NULL,
-            source_file VARCHAR NOT NULL
+            source_file VARCHAR NOT NULL,
+            source_row BIGINT NOT NULL
         )
         """
     )
@@ -159,8 +161,9 @@ def load_trip_month(
         con.execute(
             f"""
             INSERT INTO raw.yellow_trips
-            SELECT {select_list}, ? AS source_month, ? AS source_file
-            FROM {source}
+            SELECT {select_list}, ? AS source_month, ? AS source_file,
+                file_row_number + 1 AS source_row
+            FROM read_parquet({_sql_string(path.as_posix())}, file_row_number = true)
             """,
             [month, path.name],
         )
