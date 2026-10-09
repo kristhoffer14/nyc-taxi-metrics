@@ -59,6 +59,9 @@ reads those files through an in-memory DuckDB source (`read_parquet(...)`).
 - `build` does not re-read the data; `sources:strict` must run first or a stale cache is used.
 - Evidence sorts a categorical x-axis by the y value unless `sort=false` is set, which reordered
   months on the tip-rate chart. All time-ordered line charts set it.
+- `LineChart` has no `xMin`/`xMax` props (only `yMin`/`yMax`), so they are silently ignored as
+  strings or numbers and a numeric x-axis rounds up to 25. The hour charts plot a zero-padded hour
+  label on a category axis (`00` to `23`), full width because half-width charts truncate the labels.
 - Daily charts plot dates as `YYYY-MM-DD` strings on a category axis (`xType=category`). A time axis
   turns the strings into `Date` objects, and the 2025-01-05 reference line then depended on the
   viewer's time zone (its label read "4 Jan 2025" when rendered on the development machine).
@@ -101,3 +104,17 @@ export just before the Evidence build. All of these are ignored by `dashboard/.g
   in `build/`; that site is cheap to rebuild.
 - *Alternative rejected:* a source query that picks the folder at build time. Evidence source SQL
   has no access to build-time variables, so a fixed `active/` folder is the simplest option.
+
+## Deferred to Milestone 3: error matcher and `npm ci` on every build
+
+**Finding (review of `feat/m2-dashboard`).** `pipeline/dashboard.py` detects page failures by
+scanning Evidence's output for the text `Error in `, and runs `npm ci` on every build.
+
+**Decision.** Not changed in M2; revisit in M3 together with the CI workflow.
+- The text match depends on Evidence's wording and could miss a differently worded failure or match
+  unrelated output. It has caught real failures so far (for example a `printf` type error on the hour
+  charts). A sturdier check, such as asserting that every expected page exists in the build, needs
+  the CI build to settle what "complete" means.
+- `npm ci` wipes and reinstalls `node_modules` each time, which is slow locally but gives a clean,
+  lockfile-exact install. CI wants exactly that, so the right split (install once locally, `npm ci`
+  in CI) is decided when the workflow is written.
