@@ -66,3 +66,14 @@ def test_sample_pipeline_end_to_end_is_idempotent(tmp_path):
     assert raw == 2 * 3012
     assert valid + rejected == raw
     assert months == 2
+
+
+def test_download_failure_logs_clear_error_and_returns_nonzero(monkeypatch, caplog):
+    def fail(*args, **kwargs):
+        raise cli.download.DownloadError("Giving up on http://x after 4 attempts: reset")
+
+    monkeypatch.setattr(cli.download, "download_zones", fail)
+    assert cli.main(["--start", "2024-12", "--end", "2024-12"]) == 1
+    errors = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert [r.getMessage() for r in errors] == ["Giving up on http://x after 4 attempts: reset"]
+    assert all(r.exc_info is None for r in errors)

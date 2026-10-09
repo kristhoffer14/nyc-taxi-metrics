@@ -15,6 +15,14 @@ log = logging.getLogger(__name__)
 
 RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 CHUNK_SIZE = 1024 * 1024
+# Transient transport failures worth retrying. ChunkedEncodingError is what
+# requests raises when a connection drops in the middle of a streamed body.
+RETRYABLE_EXCEPTIONS = (
+    requests.ConnectionError,
+    requests.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+    requests.exceptions.ContentDecodingError,
+)
 
 
 class DownloadError(RuntimeError):
@@ -63,7 +71,7 @@ def download_file(
             part.replace(dest)
             log.info("Downloaded %s (%d bytes)", dest.name, dest.stat().st_size)
             return dest
-        except (_RetryableError, requests.ConnectionError, requests.Timeout) as exc:
+        except (_RetryableError, *RETRYABLE_EXCEPTIONS) as exc:
             part.unlink(missing_ok=True)
             if attempt == retries:
                 raise DownloadError(f"Giving up on {url} after {retries} attempts: {exc}") from exc
@@ -80,6 +88,10 @@ def download_file(
         except DownloadError:
             part.unlink(missing_ok=True)
             raise
+        except requests.RequestException as exc:
+            # Not transient (bad URL, too many redirects, ...): retrying cannot help.
+            part.unlink(missing_ok=True)
+            raise DownloadError(f"Download of {url} failed: {exc}") from exc
 
     raise AssertionError("unreachable")  # pragma: no cover
 

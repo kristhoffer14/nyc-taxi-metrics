@@ -5,13 +5,16 @@ from pipeline import download
 
 
 class FakeResponse:
-    def __init__(self, status_code, body=b""):
+    def __init__(self, status_code, body=b"", error=None):
         self.status_code = status_code
         self._body = body
+        self.error = error  # raised after the body, like a connection dropping mid-stream
 
     def iter_content(self, chunk_size):
         for i in range(0, len(self._body), chunk_size):
             yield self._body[i : i + chunk_size]
+        if self.error is not None:
+            raise self.error
 
     def __enter__(self):
         return self
@@ -81,5 +84,34 @@ def test_gives_up_after_max_retries(tmp_path):
 def test_404_fails_fast_with_clear_message(tmp_path):
     session = FakeSession([FakeResponse(404)])
     with pytest.raises(download.DownloadError, match="may not be published yet"):
+        download.download_file("http://x", tmp_path / "f", session=session)
+    assert session.calls == 1
+
+
+def test_connection_dropped_mid_download_is_retried(tmp_path):
+    dest = tmp_path / "f"
+    dropped = requests.exceptions.ChunkedEncodingError("Connection broken: IncompleteRead")
+    session = FakeSession([FakeResponse(200, b"par", error=dropped), FakeResponse(200, b"whole")])
+    delays = []
+    download.download_file("http://x", dest, session=session, sleep=delays.append)
+    assert session.calls == 2
+    assert len(delays) == 1
+    assert dest.read_bytes() == b"whole"
+    assert not (tmp_path / "f.part").exists()
+
+
+def test_persistent_mid_download_failure_raises_download_error(tmp_path):
+    dropped = requests.exceptions.ChunkedEncodingError("Connection broken")
+    session = FakeSession([FakeResponse(200, b"par", error=dropped)] * 2)
+    with pytest.raises(download.DownloadError, match="after 2 attempts"):
+        download.download_file(
+            "http://x", tmp_path / "f", session=session, retries=2, sleep=lambda s: None
+        )
+    assert not (tmp_path / "f.part").exists()
+
+
+def test_other_request_errors_are_not_retried_and_become_download_errors(tmp_path):
+    session = FakeSession([requests.exceptions.InvalidURL("bad url")])
+    with pytest.raises(download.DownloadError, match="failed"):
         download.download_file("http://x", tmp_path / "f", session=session)
     assert session.calls == 1
