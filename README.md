@@ -42,7 +42,8 @@ overwrite real data.
 
 ## Run it in 5 commands
 
-Needs Python 3.12 and, for the dashboard, Node.js 18 or later. Windows (PowerShell):
+Needs Python 3.12 and, for the dashboard, Node.js 22 (tested: CI runs 22 and local runs used 24;
+older versions are not tested). Windows (PowerShell):
 
 ```powershell
 py -3.12 -m venv .venv
