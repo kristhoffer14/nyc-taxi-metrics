@@ -119,11 +119,49 @@ def _sql_string(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def missing_optional_columns(source_columns: list[str]) -> list[str]:
+    """Names of optional raw columns that a file with source_columns lacks."""
+    present = {name.lower() for name in source_columns}
+    return [c.name for c in TRIP_COLUMNS if not c.required and c.name not in present]
+
+
+@dataclass(frozen=True)
+class FileSchema:
+    """How one trip file's columns compare with what the loader expects."""
+
+    columns: dict[str, str]  # source column name -> DuckDB type
+    missing_required: list[str]
+    missing_optional: list[str]
+    unexpected: list[str]
+    type_differences: dict[str, tuple[str, str]]  # raw name -> (file type, loaded type)
+
+
+def describe_trip_file(path: Path) -> FileSchema:
+    """Read a trip file's schema without loading it."""
+    rows = duckdb.sql(f"DESCRIBE SELECT * FROM read_parquet({_sql_string(path.as_posix())})")
+    columns = {name: str(type_) for name, type_, *_ in rows.fetchall()}
+    by_lower = {name.lower(): name for name in columns}
+    known = {c.name: c for c in TRIP_COLUMNS}
+    return FileSchema(
+        columns=columns,
+        missing_required=[c.name for c in TRIP_COLUMNS if c.required and c.name not in by_lower],
+        missing_optional=missing_optional_columns(list(columns)),
+        unexpected=[name for name in columns if name.lower() not in known],
+        type_differences={
+            column.name: (columns[by_lower[column.name]], column.type)
+            for column in TRIP_COLUMNS
+            if column.name in by_lower and columns[by_lower[column.name]] != column.type
+        },
+    )
+
+
 def _trip_select_list(source_columns: list[str], path: Path) -> str:
     by_lower = {name.lower(): name for name in source_columns}
     missing = [c.name for c in TRIP_COLUMNS if c.required and c.name not in by_lower]
     if missing:
         raise SchemaError(f"{path.name} is missing required columns: {', '.join(missing)}")
+    for name in missing_optional_columns(source_columns):
+        log.warning("%s: optional column %s is missing; loading it as NULL", path.name, name)
     parts = []
     for column in TRIP_COLUMNS:
         source = by_lower.get(column.name)

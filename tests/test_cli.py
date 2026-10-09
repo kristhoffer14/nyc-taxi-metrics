@@ -77,3 +77,12 @@ def test_download_failure_logs_clear_error_and_returns_nonzero(monkeypatch, capl
     errors = [r for r in caplog.records if r.levelname == "ERROR"]
     assert [r.getMessage() for r in errors] == ["Giving up on http://x after 4 attempts: reset"]
     assert all(r.exc_info is None for r in errors)
+
+
+def test_show_schema_prints_every_month_and_touches_no_database(capsys, tmp_path):
+    db = tmp_path / "never.duckdb"
+    assert cli.main(["--sample", "--show-schema", "--db", str(db)]) == 0
+    out = capsys.readouterr().out
+    assert "2024-12" in out and "2025-01" in out
+    assert "cbd_congestion_fee" in out  # reported as missing for 2024-12
+    assert not db.exists()

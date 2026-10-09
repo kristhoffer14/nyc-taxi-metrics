@@ -33,6 +33,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--db", type=Path, help="DuckDB file to load (default under data/)")
     parser.add_argument("--skip-dbt", action="store_true", help="load only; do not run dbt")
+    parser.add_argument(
+        "--show-schema",
+        action="store_true",
+        help="download the months if needed, print each file's schema and exit "
+        "(no database is touched)",
+    )
     args = parser.parse_args(argv)
     if args.sample and (args.start or args.end):
         parser.error("--sample cannot be combined with --start/--end")
@@ -47,6 +53,30 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     except ValueError as exc:
         parser.error(str(exc))
     return args
+
+
+def show_schemas(months: list[str], source_dir: Path) -> int:
+    """Print how each month's file differs from the expected schema.
+
+    Returns 1 if any file lacks a required column, so it can gate a milestone.
+    """
+    schemas = {m: load.describe_trip_file(source_dir / config.trip_filename(m)) for m in months}
+    print(f"{'month':<8} {'cols':>4}  missing required | missing optional | unexpected")
+    for month, schema in schemas.items():
+        print(
+            f"{month:<8} {len(schema.columns):>4}  "
+            f"{', '.join(schema.missing_required) or '-'} | "
+            f"{', '.join(schema.missing_optional) or '-'} | "
+            f"{', '.join(schema.unexpected) or '-'}"
+        )
+    print("\nType differences (file type -> loaded type):")
+    differences = {m: s.type_differences for m, s in schemas.items() if s.type_differences}
+    for month, diff in differences.items():
+        listed = ", ".join(f"{col} {old}->{new}" for col, (old, new) in diff.items())
+        print(f"  {month}: {listed}")
+    if not differences:
+        print("  none")
+    return 1 if any(s.missing_required for s in schemas.values()) else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -70,6 +100,8 @@ def main(argv: list[str] | None = None) -> int:
         if not args.sample:
             download.download_zones(source_dir, force=args.force)
             download.download_trips(args.months, source_dir, force=args.force)
+        if args.show_schema:
+            return show_schemas(args.months, source_dir)
         trip_files = {m: source_dir / config.trip_filename(m) for m in args.months}
         results = load.load_all(
             db_path, trip_files, source_dir / config.ZONE_FILENAME, force=args.force

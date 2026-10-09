@@ -131,3 +131,29 @@ def test_source_row_is_unique_within_month(tmp_path, files, zone_csv):
             "max(source_row) FROM raw.yellow_trips GROUP BY 1 ORDER BY 1"
         ).fetchall()
     assert rows == [("2024-12", 5, 5, 1, 5), ("2025-01", 7, 7, 1, 7)]
+
+
+def test_missing_optional_column_logs_warning_naming_file_and_column(
+    tmp_path, files, zone_csv, caplog
+):
+    with caplog.at_level("WARNING", logger="pipeline.load"):
+        load.load_all(tmp_path / "t.duckdb", {"2024-12": files["2024-12"]}, zone_csv)
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert any("2024-12.parquet" in w and "cbd_congestion_fee" in w for w in warnings)
+
+
+def test_no_warning_when_every_optional_column_is_present(tmp_path, zone_csv, caplog):
+    extra = ", 0.75 AS cbd_congestion_fee"
+    path = write_trips(tmp_path / "full.parquet", "2025-01", 2, extra=extra)
+    with caplog.at_level("WARNING", logger="pipeline.load"):
+        load.load_all(tmp_path / "t.duckdb", {"2025-01": path}, zone_csv)
+    assert [r for r in caplog.records if r.levelname == "WARNING"] == []
+
+
+def test_describe_trip_file_reports_missing_unexpected_and_type_differences(tmp_path):
+    old = write_trips(tmp_path / "old.parquet", "2024-12", 2, extra=", 1 AS surprise_col")
+    schema = load.describe_trip_file(old)
+    assert schema.missing_required == []
+    assert schema.missing_optional == ["cbd_congestion_fee"]
+    assert schema.unexpected == ["surprise_col"]
+    assert schema.type_differences["trip_distance"] == ("DECIMAL(2,1)", "DOUBLE")
