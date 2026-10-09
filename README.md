@@ -66,8 +66,11 @@ Real data (downloads about 700 MB for the default window and takes a few minutes
 
 All figures are computed from the 12 months 2024-07 to 2025-06 (42,971,314 valid trips) by
 [`scripts/compute_findings.py`](scripts/compute_findings.py), which reads the committed
-aggregates. Rejected trips (1,949,697 of 44,921,011 raw rows, 4.3%) are excluded; the rules
-are in [`docs/metrics.md`](docs/metrics.md). Every finding is **descriptive, not causal**.
+aggregates. The one exception is the rejected-trip count (1,949,697 of 44,921,011 raw rows, 4.3%):
+the aggregates do not hold it, so it is taken from the full-data run recorded in
+[`docs/milestones/M2-acceptance.md`](docs/milestones/M2-acceptance.md) and the script does not
+recompute it. Rejected trips are excluded from every figure; the rules are in
+[`docs/metrics.md`](docs/metrics.md). Every finding is **descriptive, not causal**.
 
 **1. Demand is concentrated in Manhattan and in the evening.** Manhattan has 87.3% of pickups
 and Queens 9.4%. The busiest hour is 18:00 (7.2% of trips), then 17:00 and 19:00;
