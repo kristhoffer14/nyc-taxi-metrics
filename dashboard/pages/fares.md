@@ -47,3 +47,7 @@ Valid trips only.
 - Both are **ratios of sums**: long trips weigh more, and short trips with extreme per-trip ratios
   do not distort the figure.
 - A window of at most 12 months cannot separate a trend from seasonality, so small month-to-month moves are not evidence of a trend.
+
+---
+
+Data: [NYC TLC Trip Record Data](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page)

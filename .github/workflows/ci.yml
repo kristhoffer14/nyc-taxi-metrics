@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Lint, tests, sample pipeline, dbt
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: python -m pytest
+      - run: python run_pipeline.py --sample
+      - name: dbt build (sample target)
+        working-directory: dbt
+        run: dbt build
+
+  dashboard:
+    name: Dashboard build (sample)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: pip install -r requirements-dev.txt
+      # Runs the sample pipeline, exports the marts, `npm ci`, and a strict Evidence build.
+      # CI=true (set by GitHub Actions) makes it use the clean lockfile-exact install.
+      - run: python build_dashboard.py --sample
+      - name: Check every page was built
+        run: |
+          for page in index.html demand/index.html fares/index.html congestion/index.html; do
+            test -s "dashboard/build/$page" || { echo "missing dashboard/build/$page"; exit 1; }
+          done
+      # The real-data site that GitHub Pages serves, built from the committed aggregates.
+      - run: python build_dashboard.py --published
+      - name: Check the published site
+        run: |
+          for page in index.html demand/index.html fares/index.html congestion/index.html; do
+            test -s "dashboard/build-published/$page" || { echo "missing dashboard/build-published/$page"; exit 1; }
+          done
+          grep -q 'href="/nyc-taxi-metrics/_app/' dashboard/build-published/index.html

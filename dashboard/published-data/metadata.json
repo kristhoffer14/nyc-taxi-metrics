@@ -1,0 +1,13 @@
+{
+  "generated_on": "2026-10-09",
+  "first_month": "2024-07",
+  "last_month": "2025-06",
+  "months": 12,
+  "valid_trips": 42971314,
+  "rows": {
+    "fct_monthly_metrics": 12,
+    "fct_demand_hourly": 14827,
+    "fct_daily_congestion": 365
+  },
+  "source": "NYC TLC Trip Record Data (yellow taxi), aggregated by this project"
+}

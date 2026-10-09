@@ -91,3 +91,7 @@ order by trips desc
 - Revenue excludes cash tips, which the TLC does not record.
 - Boroughs `EWR`, `Unknown` and `N/A` are TLC zone categories, kept as their own values.
 - A window that spans several months sums them; seasonality is not adjusted.
+
+---
+
+Data: [NYC TLC Trip Record Data](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page)

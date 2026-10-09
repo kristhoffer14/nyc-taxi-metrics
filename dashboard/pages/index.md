@@ -34,3 +34,7 @@ from taxi.fct_monthly_metrics
   card tips but not cash tips (the TLC does not record them).
 - Ratio metrics (fare per mile, tip rate) are **ratios of sums**, not averages of per-trip ratios.
 - Full definitions: `docs/metrics.md` in the repository.
+
+---
+
+Data: [NYC TLC Trip Record Data](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page)

@@ -77,6 +77,10 @@ order by is_congestion_pricing_month
     <Column id=avg_fare_usd title="Average fare (USD)" fmt=usd2 />
 </DataTable>
 
+**Descriptive, not causal, and not season-adjusted:** "Before" is July to December and "After" is
+January to June, so the two periods differ in season as well as in tolling. July and August, the
+lowest months of the year, are in "Before".
+
 The table works by month, so **2025-01 counts as an "After" month although its first four days
 (2025-01-01 to 2025-01-04) were before tolling began**. Those four days carry no fee and are mixed
 into the "After" figures; the daily charts below use the exact date.
@@ -95,3 +99,7 @@ into the "After" figures; the daily charts below use the exact date.
 - "Before" and "After" cover different months of the year, so seasonal demand differences are mixed in.
 - Short windows and a handful of months give very little to compare. Treat differences as a description of this data, not an effect estimate.
 - The zone covers local streets and avenues in Manhattan south of and including 60th Street, excluding the FDR Drive, West Side Highway/Route 9A and the Hugh L. Carey Tunnel connections to West Street. Taxis pay a $0.75 per-trip charge on trips to, from, within or through the zone, so not every Manhattan pickup carries the fee. Source: MTA, [Congestion Relief Zone](https://www.mta.info/agency/bridges-and-tunnels/congestion-relief-zone) and [frequently asked questions](https://www.mta.info/fares-tolls/tolls/congestion-relief-zone/faq).
+
+---
+
+Data: [NYC TLC Trip Record Data](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page)
