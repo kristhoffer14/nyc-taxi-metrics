@@ -153,11 +153,13 @@ only when its commands were run and the output recorded in
 [`docs/milestones/`](docs/milestones/). Gaps in the spec are proposed in
 [`docs/spec-change-requests.md`](docs/spec-change-requests.md) rather than edited in.
 
-The M1 and M2 branches each got an **independent AI review in a fresh Claude session**.
-These reviews found real bugs that were then fixed:
-`fct_trips` silently disagreed with staging after a rule change; dropped downloads were not
-retried; `python build_dashboard.py --sample` failed on a fresh clone; and an acceptance
-criterion had been marked met too early. They are AI reviews, not human ones.
+The M1 and M2 branches each got an **independent AI review in a fresh Claude session**. The
+review reports are not committed; the findings and the fixes are recorded in the "Review-fix
+acceptance run" section of [`M1-acceptance.md`](docs/milestones/M1-acceptance.md) and the
+"Re-run after review" note of [`M2-acceptance.md`](docs/milestones/M2-acceptance.md). Among the
+findings that were fixed: `fct_trips` silently disagreed with staging after a rule change;
+dropped downloads were not retried; and `python build_dashboard.py --sample` failed on a fresh
+clone. They are AI reviews, not human ones.
 
 ## Data source
 
