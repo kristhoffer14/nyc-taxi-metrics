@@ -4,26 +4,10 @@ import pytest
 from pipeline import dashboard, export
 
 
-@pytest.fixture
-def marts_db(tmp_path):
-    """A database with the three dashboard marts, each holding a few rows."""
-    db = tmp_path / "warehouse.duckdb"
-    with duckdb.connect(str(db)) as con:
-        con.execute("CREATE SCHEMA marts")
-        con.execute(
-            "CREATE TABLE marts.fct_monthly_metrics AS "
-            "SELECT * FROM (VALUES ('2025-01', 10), ('2024-12', 7)) t(year_month, trips)"
-        )
-        con.execute(
-            "CREATE TABLE marts.fct_demand_hourly AS "
-            "SELECT * FROM (VALUES ('2025-01', 2, 9, 'Queens', 3), ('2025-01', 1, 8, 'Bronx', 4)) "
-            "t(year_month, day_of_week, pickup_hour, pickup_borough, trips)"
-        )
-        con.execute(
-            "CREATE TABLE marts.fct_daily_congestion AS "
-            "SELECT * FROM (VALUES (DATE '2025-01-05', 5)) t(date_day, trips)"
-        )
-    return db
+@pytest.fixture(autouse=True)
+def no_npm_install(monkeypatch):
+    """These tests fake `run_npm`; the install step is covered in test_dashboard_build.py."""
+    monkeypatch.setattr(dashboard, "install_dependencies", lambda force: True)
 
 
 def test_export_writes_one_parquet_per_mart_with_matching_rows(marts_db, tmp_path):
@@ -83,6 +67,14 @@ def test_run_npm_reports_a_missing_npm(monkeypatch, caplog):
     assert dashboard.run_npm("ci") is False
 
     assert "Node.js" in caplog.text
+
+
+def write_site(site_dir, content="site", pages=dashboard.EXPECTED_PAGES):
+    """Write a minimal built site holding the given pages."""
+    for page in pages:
+        path = dashboard.page_file(site_dir, page)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
 
 
 class FakeProcess:
@@ -155,8 +147,7 @@ def test_a_sample_run_leaves_the_real_export_and_site_untouched(marts_db, tmp_pa
     (real.site_dir / "index.html").write_text("real site")
 
     def fake_npm(*args):
-        (tmp_path / "build").mkdir(exist_ok=True)
-        (tmp_path / "build" / "index.html").write_text("sample site")
+        write_site(tmp_path / "build", "sample site")
         return True
 
     monkeypatch.setattr(dashboard, "run_npm", fake_npm)
@@ -176,15 +167,15 @@ def test_a_real_run_moves_its_site_to_build_real_and_clears_stale_pages(
     (tmp_path / "build" / "sample_only.html").write_text("left by a sample run")
 
     def fake_npm(*args):
-        (tmp_path / "build").mkdir(exist_ok=True)
-        (tmp_path / "build" / "index.html").write_text("real site")
+        write_site(tmp_path / "build", "real site")
         return True
 
     monkeypatch.setattr(dashboard, "run_npm", fake_npm)
 
     assert dashboard.main(["--db", str(marts_db)]) == 0
 
-    assert sorted(f.name for f in (tmp_path / "build-real").iterdir()) == ["index.html"]
+    assert (tmp_path / "build-real" / "index.html").read_text() == "real site"
+    assert not (tmp_path / "build-real" / "sample_only.html").exists()
     assert not (tmp_path / "build").exists()
     active = tmp_path / "parquet" / "active"
     assert sorted(f.name for f in active.iterdir()) == sorted(

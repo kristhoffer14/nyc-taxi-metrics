@@ -234,3 +234,4 @@ node_modules/
 !tests/fixtures/*.parquet
 *.part
 dbt/.user.yml
+!dashboard/published-data/*.parquet
