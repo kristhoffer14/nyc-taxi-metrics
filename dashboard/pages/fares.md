@@ -8,6 +8,7 @@ How do average fare per mile and tip rate evolve month by month?
 select
     month_start,
     year_month,
+    strftime(month_start, '%b %y') as month_label,
     trips,
     fare_per_mile_usd,
     tip_rate,
@@ -25,12 +26,11 @@ Valid trips only.
 
 **Data window:** <Value data={window} column=first_month /> to <Value data={window} column=last_month />
 
-<Grid cols=2>
-    <LineChart data={monthly} x=year_month y=fare_per_mile_usd sort=false title="Fare per mile (USD)" yFmt=usd2 />
-    <LineChart data={monthly} x=year_month y=tip_rate sort=false title="Tip rate (credit-card trips)" yFmt=pct1 />
-</Grid>
+<LineChart data={monthly} x=month_label y=fare_per_mile_usd sort=false title="Fare per mile (USD)" yFmt=usd2 />
 
-<DataTable data={monthly}>
+<LineChart data={monthly} x=month_label y=tip_rate sort=false title="Tip rate (credit-card trips)" yFmt=pct1 />
+
+<DataTable data={monthly} rows=all>
     <Column id=year_month title="Month" />
     <Column id=trips fmt=num0 />
     <Column id=fare_per_mile_usd title="Fare per mile (USD)" fmt=usd2 />
@@ -46,4 +46,4 @@ Valid trips only.
   Cash tips are not recorded, so cash trips are left out rather than counted as zero tips.
 - Both are **ratios of sums**: long trips weigh more, and short trips with extreme per-trip ratios
   do not distort the figure.
-- With only a few months in the window, a change between two points is not a trend.
+- A window of at most 12 months cannot separate a trend from seasonality, so small month-to-month moves are not evidence of a trend.

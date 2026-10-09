@@ -75,11 +75,11 @@ order by trips desc
 ```
 
 <Grid cols=2>
-    <BarChart data={by_borough} x=pickup_borough y=trips title="Trips by pickup borough" swapXY=true yFmt=num0 />
-    <BarChart data={by_borough} x=pickup_borough y=revenue_usd title="Revenue by pickup borough (USD)" swapXY=true yFmt=usd0k />
+    <BarChart data={by_borough} x=pickup_borough y=trips title="Trips by pickup borough (millions)" swapXY=true yFmt=num0m />
+    <BarChart data={by_borough} x=pickup_borough y=revenue_usd title="Revenue by pickup borough (millions of USD)" swapXY=true yFmt=usd0m />
 </Grid>
 
-<DataTable data={by_borough}>
+<DataTable data={by_borough} rows=all>
     <Column id=pickup_borough title="Pickup borough" />
     <Column id=trips fmt=num0 />
     <Column id=revenue_usd title="Revenue (USD)" fmt=usd0 />
