@@ -68,8 +68,10 @@ TRIP_LEVEL_FRAGMENTS = (
 )
 
 # Upper bounds on the grain: a daily mart for a year, an hourly one for 12 months of
-# 7 weekdays x 24 hours x 8 boroughs. Trip rows would be orders of magnitude larger.
-MAX_ROWS = {"fct_monthly_metrics": 60, "fct_demand_hourly": 60_000, "fct_daily_congestion": 800}
+# 7 weekdays x 24 hours x 8 boroughs = 16,128 rows at most (the real file has 14,827). The
+# hourly cap is kept close to that maximum so a file that grew well past the grain fails here
+# instead of relying on the reconciliation tests. Trip rows would be orders of magnitude larger.
+MAX_ROWS = {"fct_monthly_metrics": 60, "fct_demand_hourly": 20_000, "fct_daily_congestion": 800}
 
 
 def published(table):
