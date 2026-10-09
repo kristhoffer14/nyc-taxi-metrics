@@ -8,13 +8,18 @@ Design priorities: correctness, testability, clarity, reproducibility. Out of sc
 ## 2. Business questions
 1. How do trips and revenue vary by hour of day, weekday and pickup borough?
 2. How do average fare per mile and tip rate evolve month by month? (Tip rate is computed on credit-card trips only because cash tips are not recorded.)
-3. After NYC congestion pricing started in January 2025, what share of trips carry `cbd_congestion_fee`, and how did Manhattan-pickup trips and fares change versus the months before? Descriptive only; state that it is not causal.
+3. After NYC congestion pricing started (tolling began on 2025-01-05), what share of trips carry `cbd_congestion_fee`, and how did Manhattan-pickup trips and fares change versus the months before? Descriptive only; state that it is not causal. Monthly views treat 2025-01 as the first "after" month; daily views use the exact date (dbt var `congestion_pricing_start_date`).
+
+Metric definitions (full detail in `docs/metrics.md`). All ratios are ratios of sums, not means of per-trip ratios:
+- Revenue = `sum(total_amount)`.
+- Fare per mile = `sum(fare_amount) / sum(trip_distance)` over trips with distance > 0.
+- Tip rate = `sum(tip_amount) / sum(fare_amount)` over credit-card trips with fare > 0.
 
 ## 3. Data
 - Yellow taxi trips, Parquet, one file per month: `https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_YYYY-MM.parquet`
 - Zone lookup, CSV: `https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv`
 - Default window: 2024-07 to 2025-06 (configurable). The `cbd_congestion_fee` column exists only from 2025 onward; the schema must handle files that lack it.
-- The data has known quality issues (negative fares, dropoff before pickup, timestamps outside the file's month). Staging must filter or flag them with documented rules.
+- The data has known quality issues (negative fares, dropoff before pickup, timestamps outside the file's month). Staging must filter or flag them with documented rules. A trip is rejected when its pickup is outside the file's month; a dropoff in the next month is valid (trips that cross midnight on the last day).
 - Verify the URLs and file schemas before building. Raw downloads are never committed.
 
 ## 4. Architecture
@@ -22,6 +27,7 @@ Design priorities: correctness, testability, clarity, reproducibility. Out of sc
 
 - Engine: DuckDB with dbt-duckdb. No servers, no cloud, no credentials.
 - Python 3.12, virtualenv, pip. Runs on Windows 11 (PowerShell) and Ubuntu (CI): use pathlib, no bash-only scripts.
+- dbt has two targets so sample and real data never share a database: `sample` (default, `data/sample.duckdb`) and `dev` (real data, `data/nyc_taxi.duckdb`). A plain `dbt build` uses the sample; `dbt build --target dev` uses real data. `run_pipeline.py` picks the target itself.
 
 ## 5. Requirements
 ### Ingestion
