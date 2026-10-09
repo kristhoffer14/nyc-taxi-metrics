@@ -142,3 +142,46 @@ exit=0
 ```
 
 **Status: all Milestone 1 acceptance criteria met.**
+
+## Review-fix acceptance run (2026-10-09)
+
+Four review findings were fixed on `feat/m1-pipeline`: stale `fct_trips` after a staging
+rules change (`rules_hash` plus `assert_fct_trips_matches_staging`, see `docs/decisions.md`),
+retries for dropped downloads and a clean CLI error, a loader warning for missing optional
+columns plus `--show-schema`, and metric shares recomputed on valid trips.
+
+Environment: Windows 11, PowerShell, Python 3.12. A fresh clone of `feat/m1-pipeline` at
+`5f44748` into an empty directory, a new venv, then `pip install -r requirements-dev.txt`.
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `python run_pipeline.py --sample` | 0 | 2 months x 3,012 rows loaded; dbt `PASS=54 WARN=0 ERROR=0 SKIP=0` |
+| 2 | `cd dbt; dbt build` | 0 | `Completed successfully`, `PASS=54 WARN=0 ERROR=0 SKIP=0` |
+| 3 | `python -m pytest` | 0 | `40 passed in 35.24s` |
+| 4 | `ruff check .` / `ruff format --check .` | 0 / 0 | `All checks passed!` / `21 files already formatted` |
+
+The build now has 42 data tests (one more: `assert_fct_trips_matches_staging`). After the
+run, `git status` in the clone was empty. Run 1 logged the new warning for the one sample
+month without the column: `yellow_tripdata_2024-12.parquet: optional column
+cbd_congestion_fee is missing; loading it as NULL`.
+
+### Stale fct_trips: reproduction
+
+On the sample database with `--vars '{max_trip_distance_miles: 1}'`, `dbt run` left
+`fct_trips` at 2,945 (2024-12) and 2,869 (2025-01) rows while `stg_yellow_trips` had 755 and
+764. The new test failed with `Got 2 results`. After the fix, the same sequence rebuilds
+both months and the test passes; a rerun with default variables rebuilds them again.
+
+### Schema of every month in the default window
+
+`python run_pipeline.py --show-schema` (downloads the 12 files, touches no database):
+
+| Months | Columns | Missing required | Missing optional | Unexpected | Type differences |
+|---|---|---|---|---|---|
+| 2024-07 to 2024-12 | 19 | none | `cbd_congestion_fee` | none | none |
+| 2025-01 to 2025-06 | 20 | none | none | none | none |
+
+All 12 months load with the current schema. `cbd_congestion_fee` is NULL for 2024-07 to
+2024-12 and populated from 2025-01, as the spec expects.
+
+**Status: all four acceptance commands pass after the review fixes.**
