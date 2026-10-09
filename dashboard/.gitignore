@@ -1,0 +1,7 @@
+.evidence/template
+.evidence/meta
+.svelte-kit
+build
+node_modules
+.env
+parquet/*.parquet

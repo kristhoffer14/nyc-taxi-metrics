@@ -1,0 +1,4 @@
+name: monthly
+type: duckdb
+options:
+  filename: ":memory:"
