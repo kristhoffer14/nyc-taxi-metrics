@@ -27,3 +27,5 @@ vars:
   # Staging reject thresholds, documented in models/staging/_staging.yml.
   max_trip_distance_miles: 100
   max_trip_duration_hours: 24
+  # MTA congestion relief zone tolling (cbd_congestion_fee) began on this date.
+  congestion_pricing_start_date: "2025-01-05"
