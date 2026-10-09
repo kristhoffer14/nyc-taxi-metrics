@@ -59,6 +59,9 @@ reads those files through an in-memory DuckDB source (`read_parquet(...)`).
 - `build` does not re-read the data; `sources:strict` must run first or a stale cache is used.
 - Evidence sorts a categorical x-axis by the y value unless `sort=false` is set, which reordered
   months on the tip-rate chart. All time-ordered line charts set it.
+- Daily charts plot dates as `YYYY-MM-DD` strings on a category axis (`xType=category`). A time axis
+  turns the strings into `Date` objects, and the 2025-01-05 reference line then depended on the
+  viewer's time zone (its label read "4 Jan 2025" when rendered on the development machine).
 
 **Why Parquet instead of the `.duckdb` file.** The connector bundles `@duckdb/node-api ^1.4.x`
 while the pipeline writes DuckDB 1.5.5 files. Whether the older reader opens the newer file format

@@ -15,10 +15,57 @@ Python 3.12, Node 24.20.0, from the committed sample fixture (months 2024-12 and
 | 8 | `pytest`, `ruff check`, `ruff format --check` clean; nothing generated tracked | Met. 49 passed; ruff clean; `git status` clean after commits |
 | 9 | Tool choice recorded in `docs/decisions.md` | Met |
 
+## Full window, real data (2024-07 to 2025-06)
+
+Run on 2026-10-09 against `data/nyc_taxi.duckdb` after `python run_pipeline.py` loaded all 12 months
+(the raw files were already in `data/raw/`; no download was needed).
+
+| Check | Result |
+|---|---|
+| Free disk before load | 219 GB; database ended at 2.68 GB (estimate was about 4 GB) |
+| Raw rows loaded | 44,921,011 |
+| Valid trips (`fct_trips`) | 42,971,314 |
+| Rejected trips | 1,949,697 (valid + rejected = raw) |
+| `dbt build` (dev target) | `PASS=65 WARN=0 ERROR=0`, 265 s |
+| Parquet exported | `fct_monthly_metrics` 12 rows, `fct_demand_hourly` 14,827 rows, `fct_daily_congestion` 365 rows |
+| Reconciliation | Trips summed over `fct_demand_hourly` and `fct_daily_congestion` equal `fct_monthly_metrics` for all 12 months (42,971,314 in total, 0 mismatches) |
+| `python build_dashboard.py` (no `--sample`) | Exit 0, no `Error in` lines, pages screenshotted from the served build |
+
+Figures shown on the pages, checked against direct queries of the database:
+
+| Figure | Value |
+|---|---|
+| Revenue, whole window | $1,235,223,403 |
+| Manhattan pickups per month, before (2024-07 to 2024-12) | 2,992,331 |
+| Manhattan pickups per month, after (2025-01 to 2025-06) | 3,262,880 |
+| Manhattan average fare, before / after | $16.54 / $15.98 |
+| CBD fee share by month, 2025-01 to 2025-06 | 65.6%, 73.8%, 74.0%, 73.7%, 73.0%, 73.5% |
+| CBD fee share, daily | n/a on 2025-01-04, 66.2% on 2025-01-05 |
+| Monthly fare per mile | $5.55 (2024-08) to $6.13 (2024-12) |
+| Monthly tip rate | 21.2% (2024-08) to 22.8% (2025-01, 2025-02) |
+
+These before/after figures are descriptive. The "before" months are July to December and the
+"after" months are January to June, so seasonality is mixed in.
+
+### Problems the full data exposed (fixed)
+
+- The before/after table put every "after" month on its own row, because the month was part of the
+  group label. It is now one row per period with the months covered.
+- Tables stopped at 10 rows and hid months; they now show all rows.
+- Month labels on the fare and tip charts were cut to one letter at half width; the charts are now
+  full width with short labels (`Jul 24`).
+- Axis labels on the borough charts were clipped; they now use millions.
+
+### Congestion marker and time zones
+
+The daily charts plot each day as a plain `YYYY-MM-DD` string on a category axis, and the marker
+sits on the category `2025-01-05`. No `Date` object is involved, so the position cannot move with
+the viewer's time zone. Before this change the label read "4 Jan 2025" when rendered on the development machine.
+The marker was checked on the real-data build.
+
 ## Not verified
 
 - **Ubuntu build.** Only Windows was run. The Ubuntu check belongs to the M3 CI workflow.
-- **Real data.** The dashboard was built only from the sample. A build with `--db data/nyc_taxi.duckdb`
-  has not been run, and the sample has two months, so the trend charts have two points.
-- **Reference line position.** Evidence formats the 2025-01-05 marker from a UTC date; its position
-  can be offset by hours depending on the viewer's time zone. The label text is fixed.
+- **Other time zones.** The marker was checked in one browser time zone. The category axis removes
+  the dependence by construction, but it was not re-rendered under a second time zone.
+- **Hour chart axis.** `xMax=23` is ignored by Evidence, so the hour axis runs to 25.
