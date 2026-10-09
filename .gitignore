@@ -218,3 +218,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Data and build artifacts
+*.duckdb
+*.duckdb.wal
+data/
+target/
+dbt_packages/
+logs/
+node_modules/
+.claude/settings.local.json
