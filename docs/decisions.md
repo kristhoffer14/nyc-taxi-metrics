@@ -34,3 +34,87 @@ The singular test `assert_fct_trips_matches_staging` compares per-month row coun
 - *Compare row counts to decide what to rebuild:* misses rule changes that keep the
   count the same, and needs a scan of staging on every run.
 - *Hash only the variables:* misses edits to the rule SQL.
+
+## Dashboard tool: Evidence (open-source build), reading Parquet
+
+**Decision.** The dashboard is an Evidence project in `dashboard/`, built to static HTML with
+`npm run build:strict`. The marts are exported to Parquet by `pipeline/export.py`, and Evidence
+reads those files through an in-memory DuckDB source (`read_parquet(...)`).
+
+**What was verified (2026-10-09).**
+- `@evidence-dev/evidence` 40.1.8 and `@evidence-dev/duckdb` 2.0.1 are the current npm releases, MIT
+  licensed and not marked deprecated. The GitHub repository is not archived.
+- The current Evidence docs centre on the managed Evidence Studio. The open-source static build
+  is documented under `legacy-docs.evidence.dev`, and the `legacy` branch of `evidence-dev/template`
+  is the open-source scaffold. Nothing states that it will stop being maintained, but the "legacy"
+  label is a risk for the long term.
+- A spike on Windows 11 with Node 24.20.0 passed: `npm install`, `npm run sources` and
+  `npm run build:strict` succeeded. The Ubuntu build is checked in M3 (CI).
+
+**Gotchas found while building.**
+- `@evidence-dev/evidence` 40.1.8 needs exactly `typescript@5.4.2` as a peer; npm otherwise picks
+  TypeScript 7 and fails to resolve. It is pinned in `dashboard/package.json`.
+- `build:strict` exits 0 even when a page query fails. `pipeline/dashboard.py` therefore scans
+  Evidence's output for `Error in ...` and fails the build.
+- `build` does not re-read the data; `sources:strict` must run first or a stale cache is used.
+- Evidence sorts a categorical x-axis by the y value unless `sort=false` is set, which reordered
+  months on the tip-rate chart. All time-ordered line charts set it.
+- `LineChart` has no `xMin`/`xMax` props (only `yMin`/`yMax`), so they are silently ignored as
+  strings or numbers and a numeric x-axis rounds up to 25. The hour charts plot a zero-padded hour
+  label on a category axis (`00` to `23`), full width because half-width charts truncate the labels.
+- Daily charts plot dates as `YYYY-MM-DD` strings on a category axis (`xType=category`). A time axis
+  turns the strings into `Date` objects, and the 2025-01-05 reference line then depended on the
+  viewer's time zone (its label read "4 Jan 2025" when rendered on the development machine).
+
+**Why Parquet instead of the `.duckdb` file.** The connector bundles `@duckdb/node-api ^1.4.x`
+while the pipeline writes DuckDB 1.5.5 files. Whether the older reader opens the newer file format
+was not verified, and Parquet avoids the question. It also keeps the dashboard independent of dbt:
+CI can build the site from the committed fixture without the Node side touching the database.
+
+**Rejected alternatives.**
+- *Python-only (Plotly or Altair with Jinja):* one toolchain and no Node, but it departs from the
+  spec's preferred tool and means writing the page layout by hand. It remains the fallback if
+  Evidence stops building.
+- *Reading the `.duckdb` file directly:* fewer steps, but depends on the unverified format
+  compatibility above.
+- *Querying `fct_trips` from the dashboard:* puts untested SQL in the pages and scans every trip
+  at build time. The dashboard reads only contract-tested marts (`fct_demand_hourly`,
+  `fct_daily_congestion`, `fct_monthly_metrics`).
+
+## Dashboard output folders: sample and real runs are kept apart
+
+**Decision.** `build_dashboard.py` writes each kind of run to its own folders, so `--sample` can
+never overwrite the real-data dashboard:
+
+| | `--sample` | real (no flag) |
+|---|---|---|
+| Parquet export | `dashboard/parquet/sample/` | `dashboard/parquet/real/` |
+| Built site | `dashboard/build/` | `dashboard/build-real/` |
+
+The pages read one fixed folder, `dashboard/parquet/active/`, which each run refills from its own
+export just before the Evidence build. All of these are ignored by `dashboard/.gitignore`.
+
+**Why this shape.**
+- Evidence's CLI always copies its site to `./build` and ignores `EVIDENCE_BUILD_DIR` for that last
+  step, so the real site is moved to `build-real/` by `pipeline/dashboard.py` after the build.
+- The sample site stays in `dashboard/build/` because `docs/SPEC.md` (section 7) names
+  `dashboard/build/index.html` for `--sample`. The spec is not edited here.
+- `build/` is wiped before each build: Evidence copies into it without clearing, so pages from an
+  earlier run would otherwise leak into the next one. A real run therefore removes any sample site
+  in `build/`; that site is cheap to rebuild.
+- *Alternative rejected:* a source query that picks the folder at build time. Evidence source SQL
+  has no access to build-time variables, so a fixed `active/` folder is the simplest option.
+
+## Deferred to Milestone 3: error matcher and `npm ci` on every build
+
+**Finding (review of `feat/m2-dashboard`).** `pipeline/dashboard.py` detects page failures by
+scanning Evidence's output for the text `Error in `, and runs `npm ci` on every build.
+
+**Decision.** Not changed in M2; revisit in M3 together with the CI workflow.
+- The text match depends on Evidence's wording and could miss a differently worded failure or match
+  unrelated output. It has caught real failures so far (for example a `printf` type error on the hour
+  charts). A sturdier check, such as asserting that every expected page exists in the build, needs
+  the CI build to settle what "complete" means.
+- `npm ci` wipes and reinstalls `node_modules` each time, which is slow locally but gives a clean,
+  lockfile-exact install. CI wants exactly that, so the right split (install once locally, `npm ci`
+  in CI) is decided when the workflow is written.

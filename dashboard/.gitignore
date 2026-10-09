@@ -1,0 +1,8 @@
+.evidence/template
+.evidence/meta
+.svelte-kit
+build
+build-real
+node_modules
+.env
+parquet/

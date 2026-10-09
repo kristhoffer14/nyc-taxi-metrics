@@ -11,6 +11,7 @@ DATA_DIR = ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
 FIXTURES_DIR = ROOT / "tests" / "fixtures"
 DBT_DIR = ROOT / "dbt"
+DASHBOARD_DIR = ROOT / "dashboard"
 
 DB_PATH = DATA_DIR / "nyc_taxi.duckdb"
 SAMPLE_DB_PATH = DATA_DIR / "sample.duckdb"

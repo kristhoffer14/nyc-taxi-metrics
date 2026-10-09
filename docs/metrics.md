@@ -24,6 +24,38 @@ trip by its size and are not distorted by very short trips with extreme per-trip
 | Manhattan pickups | `manhattan_pickup_trips` | `count(*)` | Valid trips whose pickup zone's borough is Manhattan |
 | Manhattan average fare (USD) | `manhattan_pickup_avg_fare_usd` | `sum(fare_amount) / count(*)` | Same as Manhattan pickups |
 
+## Dashboard marts
+
+Two further marts feed the dashboard. They use the same population (valid trips) and the
+same definitions as above; only the grain differs.
+
+`marts.fct_demand_hourly`: one row per `year_month`, `day_of_week`, `pickup_hour` and
+`pickup_borough` that has at least one trip.
+
+| Metric | Column | Definition |
+|---|---|---|
+| Trips | `trips` | `count(*)` per grain key |
+| Revenue (USD) | `revenue_usd` | `sum(total_amount)` per grain key |
+| Weekday | `day_of_week` | ISO weekday of the pickup date (1 = Monday, 7 = Sunday) |
+| Hour | `pickup_hour` | Hour of the pickup timestamp (0-23, local time) |
+| Borough | `pickup_borough` | Borough of the pickup zone, from `dim_zone` (EWR, Unknown and N/A are kept as their own values) |
+
+`marts.fct_daily_congestion`: one row per pickup day (`date_day`) with valid trips. Daily
+views use the exact start date, 2025-01-05.
+
+| Metric | Column | Definition |
+|---|---|---|
+| Trips | `trips` | `count(*)` per day |
+| Congestion pricing active | `is_congestion_pricing_active` | `date_day >= 2025-01-05` (var `congestion_pricing_start_date`) |
+| CBD fee trip share | `cbd_fee_trip_share` | `count(*) filter (where has_cbd_fee) / count(*)`; NULL before 2025-01-05 |
+| Manhattan pickups | `manhattan_pickup_trips` | `count(*)` of trips whose pickup zone's borough is Manhattan |
+| Manhattan average fare (USD) | `manhattan_pickup_avg_fare_usd` | `sum(fare_amount) / count(*)` over Manhattan pickups |
+
+Both marts reconcile with `fct_monthly_metrics`: summed over a month, `trips` and
+Manhattan pickups must equal the monthly values (test
+`assert_dashboard_marts_reconcile_with_monthly`). The daily CBD share differs from the monthly
+one in January 2025 because the monthly share includes the four days before tolling began.
+
 ## Notes and caveats
 
 - **Revenue** is `total_amount`: everything charged to the rider, including fare,
