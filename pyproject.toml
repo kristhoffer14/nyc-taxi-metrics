@@ -11,3 +11,4 @@ select = ["E", "F", "W", "I", "B", "UP", "PTH"]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra"
+markers = ["slow: runs the full sample pipeline including dbt (about 10 s)"]
