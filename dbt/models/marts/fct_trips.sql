@@ -8,9 +8,10 @@
 }}
 
 -- One row per valid trip. Incremental by source month: a run processes only
--- months that are new or whose load_log.loaded_at changed (a --force reload)
--- and replaces them whole. Comparing loaded_at for equality, not "newer than",
--- avoids depending on clocks or time zones.
+-- months that are new, whose load_log.loaded_at changed (a --force reload), or
+-- that were built under different staging rules (rules_hash), and replaces them
+-- whole. Comparing loaded_at for equality, not "newer than", avoids depending
+-- on clocks or time zones.
 
 with months_to_process as (
     select load_log.source_month, load_log.loaded_at
@@ -18,9 +19,10 @@ with months_to_process as (
     {% if is_incremental() %}
     where not exists (
         select 1
-        from (select distinct source_month, loaded_at from {{ this }}) as built
+        from (select distinct source_month, loaded_at, rules_hash from {{ this }}) as built
         where built.source_month = load_log.source_month
             and built.loaded_at = load_log.loaded_at
+            and built.rules_hash = '{{ staging_rules_hash() }}'
     )
     {% endif %}
 ),
@@ -66,5 +68,6 @@ select
     cast(total_amount as double) as total_amount,
     cast(cbd_congestion_fee_amount as double) as cbd_congestion_fee_amount,
     cast(coalesce(cbd_congestion_fee_amount > 0, false) as boolean) as has_cbd_fee,
-    cast(loaded_at as timestamp) as loaded_at
+    cast(loaded_at as timestamp) as loaded_at,
+    cast('{{ staging_rules_hash() }}' as varchar) as rules_hash
 from trips

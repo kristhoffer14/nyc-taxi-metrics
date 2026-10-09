@@ -71,7 +71,8 @@ models:
     description: >
       One row per valid trip (see stg_yellow_trips). Incremental by source
       month: each run rebuilds only months that are new or whose loaded_at
-      changed (a --force reload), replacing them whole (delete+insert on
+      changed (a --force reload) or that were built under different staging
+      rules (rules_hash), replacing them whole (delete+insert on
       source_month).
     columns:
       - name: trip_id
@@ -173,6 +174,9 @@ models:
       - name: loaded_at
         description: When the trip's month was loaded into raw (local time); a change triggers reprocessing of that month.
         data_type: timestamp
+      - name: rules_hash
+        description: Fingerprint of the staging rules (thresholds and rule SQL) the month was built under; a change triggers reprocessing of that month.
+        data_type: varchar
 
   - name: fct_monthly_metrics
     description: One row per month of valid trips. Ratio metrics are ratios of sums; see docs/metrics.md.
