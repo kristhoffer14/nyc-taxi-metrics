@@ -5,8 +5,9 @@ decisions and findings are complete"). Recorded on 2026-10-09 on Windows 11, Pyt
 
 ## Local run from a fresh clone
 
-A new clone of `feat/m3-ci-docs` (HEAD `8f2b053`) into an empty folder, a new venv, then
-`pip install -r requirements-dev.txt`. No `data/` folder existed.
+A new clone of `feat/m3-ci-docs` (HEAD `8f2b053`, the commit this run was made on) into an empty
+folder, a new venv, then `pip install -r requirements-dev.txt`. No `data/` folder existed. This run
+was not repeated on later commits; the same commands ran in CI on `0e5ba66` (next section).
 
 | Command | Exit | Result |
 |---|---|---|
@@ -21,22 +22,37 @@ A new clone of `feat/m3-ci-docs` (HEAD `8f2b053`) into an empty folder, a new ve
 The `--published` build reuses Evidence's `build/` folder and moves it to `build-published/`, so
 `build/` is gone afterwards; that is expected.
 
+## Pull request checks on GitHub
+
+Pull request #3, head `0e5ba66`. Run: <https://github.com/kristhoffer14/nyc-taxi-metrics/actions/runs/37989118483>
+
+| Job | Conclusion |
+|---|---|
+| Lint, tests, sample pipeline, dbt (`ruff`, `pytest`, `run_pipeline.py --sample`, `dbt build`) | success |
+| Dashboard build (sample), including the `--published` build and the page checks | success |
+
+This is the first run on Ubuntu 24.04 and on Node 22. An earlier run on `17d9035`
+(<https://github.com/kristhoffer14/nyc-taxi-metrics/actions/runs/37986173295>) also succeeded.
+
 ## Checked on the working tree
 
 - The published build puts the base path on every asset and page link (`/nyc-taxi-metrics/_app/...`,
   `/nyc-taxi-metrics/demand`), and `evidence.config.yaml` is restored after the build.
 - Screenshots in `docs/img/` come from the real-data build (`dashboard/build-real/`, 12 months).
-- `python scripts/compute_findings.py` produced every number quoted in the README findings.
+- `python scripts/compute_findings.py` produced every number quoted in the README findings except
+  the rejected-trip counts, which come from `M2-acceptance.md`; `tests/test_findings.py` now checks
+  the quoted figures against the script.
 - The TLC page was read: it has no endorsement wording, so none is used (attribution only).
 - A real-data rebuild after the lockfile stamp existed skipped `npm ci` (log line "skipping npm ci").
 
 ## Not verified yet
 
-- **Green pull request checks on Ubuntu.** The workflows are written and parse as YAML, but they have
-  not run on GitHub. The first CI run is also the first Ubuntu run of the dashboard build and of Node 22.
-  This row stays open until the run is linked here.
-- **The Pages deploy.** It needs Settings -> Pages -> Source: GitHub Actions (set by the owner) and runs
-  only on pushes to `main`.
-- **Pinned action SHAs** were resolved from the official repositories with `git ls-remote` on
-  2026-10-09; each was a tag of that repository, but they have not been run yet.
-- **Live site, other time zones, private repositories** (Pages needs a public repository or a paid plan).
+- **The Pages deploy.** The owner reports the Pages source is now set to GitHub Actions; this record
+  did not check it. `pages.yml` has not run: it runs only on pushes to `main`, so the first deploy
+  is after the merge. `actions/configure-pages` was removed because its outputs are not used (the
+  base path is fixed in `pipeline/dashboard.py`), so the build job needs no `pages` permission.
+- **Two pinned action SHAs have not run.** `upload-pages-artifact` and `deploy-pages` run only in
+  `pages.yml`. `checkout`, `setup-python` and `setup-node` ran in CI. All five SHAs in use were
+  resolved to their tags from the official repositories with `git ls-remote` on 2026-10-09.
+- **Live site, other time zones, private repositories** (Pages needs a public repository or a paid
+  plan). The README link returns 404 until the first deploy.
