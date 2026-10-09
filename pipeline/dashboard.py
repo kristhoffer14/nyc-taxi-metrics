@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import logging
 import os
 import shutil
@@ -12,6 +13,7 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 import duckdb
@@ -31,6 +33,7 @@ ACTIVE_PARQUET = "active"
 # The published site is served from https://<user>.github.io/<repo>/.
 PUBLISHED_BASE_PATH = "/nyc-taxi-metrics"
 PUBLISHED_DATA_DIRNAME = "published-data"
+METADATA_FILENAME = "metadata.json"
 LOCKFILE_STAMP = ".lockfile-hash"
 
 
@@ -69,6 +72,33 @@ def published_outputs() -> Outputs:
         active_dir=root / "parquet" / ACTIVE_PARQUET,
         scratch_site_dir=root / "build",
     )
+
+
+def write_metadata(published_dir: Path, rows: dict[str, int]) -> dict:
+    """Record what the published files cover and when they were generated.
+
+    The schema test cannot see stale values; this file makes the age and window of the data
+    visible in review and in the README.
+    """
+    monthly = (published_dir / "fct_monthly_metrics.parquet").as_posix()
+    with duckdb.connect() as con:
+        first, last, months, trips = con.execute(
+            "SELECT min(year_month), max(year_month), count(*), sum(trips) FROM read_parquet(?)",
+            [monthly],
+        ).fetchone()
+    metadata = {
+        "generated_on": date.today().isoformat(),
+        "first_month": first,
+        "last_month": last,
+        "months": months,
+        "valid_trips": int(trips),
+        "rows": rows,
+        "source": "NYC TLC Trip Record Data (yellow taxi), aggregated by this project",
+    }
+    (published_dir / METADATA_FILENAME).write_text(
+        json.dumps(metadata, indent=2) + "\n", encoding="utf-8", newline="\n"
+    )
+    return metadata
 
 
 def stage_parquet(outputs: Outputs) -> None:
@@ -291,7 +321,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if export_dir is not None:
-        log.info("Published data written to %s (rows: %s); commit it", export_dir, rows)
+        metadata = write_metadata(export_dir, rows)
+        log.info("Published data written to %s (%s); commit it", export_dir, metadata)
         return 0
     if args.skip_build:
         return 0

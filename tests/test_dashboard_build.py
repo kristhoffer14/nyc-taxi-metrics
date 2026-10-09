@@ -1,5 +1,8 @@
 """Site checks, the npm install shortcut, the Pages base path and the published-data mode."""
 
+import json
+from datetime import date
+
 import pytest
 
 from pipeline import dashboard, export
@@ -168,8 +171,14 @@ def test_publish_data_exports_the_marts_to_the_committed_folder(marts_db, tmp_pa
 
     published = tmp_path / dashboard.PUBLISHED_DATA_DIRNAME
     assert sorted(f.name for f in published.iterdir()) == sorted(
-        f"{table}.parquet" for table in export.DASHBOARD_TABLES
+        [f"{table}.parquet" for table in export.DASHBOARD_TABLES] + [dashboard.METADATA_FILENAME]
     )
+    metadata = json.loads((published / dashboard.METADATA_FILENAME).read_text())
+    assert metadata["generated_on"] == date.today().isoformat()
+    assert metadata["first_month"] == "2024-12"
+    assert metadata["last_month"] == "2025-01"
+    assert metadata["valid_trips"] == 17
+    assert metadata["rows"]["fct_monthly_metrics"] == 2
 
 
 def test_publish_data_cannot_use_the_sample_database():
