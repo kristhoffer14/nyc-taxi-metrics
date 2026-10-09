@@ -2,6 +2,28 @@ appearance:
   default: system
   switcher: true
 
+# Palette from the dataviz reference instance. Slots 1-2 (blue, orange) are the
+# only ones the pages use; validated for CVD and contrast in both modes.
+theme:
+  colorPalettes:
+    default:
+      light:
+        - "#2a78d6"
+        - "#eb6834"
+        - "#1baf7a"
+      dark:
+        - "#3987e5"
+        - "#d95926"
+        - "#199e70"
+  colorScales:
+    default:
+      light:
+        - "#cde2fb"
+        - "#0d366b"
+      dark:
+        - "#184f95"
+        - "#cde2fb"
+
 plugins:
   components:
     "@evidence-dev/core-components": {}

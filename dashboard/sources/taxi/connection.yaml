@@ -1,4 +1,4 @@
-name: monthly
+name: taxi
 type: duckdb
 options:
   filename: ":memory:"

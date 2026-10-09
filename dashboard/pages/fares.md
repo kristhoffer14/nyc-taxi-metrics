@@ -1,0 +1,49 @@
+---
+title: Fare and tip trends
+---
+
+How do average fare per mile and tip rate evolve month by month?
+
+```sql monthly
+select
+    month_start,
+    year_month,
+    trips,
+    fare_per_mile_usd,
+    tip_rate,
+    credit_card_trips
+from taxi.fct_monthly_metrics
+order by month_start
+```
+
+```sql window
+select min(year_month) as first_month, max(year_month) as last_month
+from taxi.fct_monthly_metrics
+```
+
+Valid trips only.
+
+**Data window:** <Value data={window} column=first_month /> to <Value data={window} column=last_month />
+
+<Grid cols=2>
+    <LineChart data={monthly} x=year_month y=fare_per_mile_usd sort=false title="Fare per mile (USD)" yFmt=usd2 />
+    <LineChart data={monthly} x=year_month y=tip_rate sort=false title="Tip rate (credit-card trips)" yFmt=pct1 />
+</Grid>
+
+<DataTable data={monthly}>
+    <Column id=year_month title="Month" />
+    <Column id=trips fmt=num0 />
+    <Column id=fare_per_mile_usd title="Fare per mile (USD)" fmt=usd2 />
+    <Column id=credit_card_trips title="Credit-card trips" fmt=num0 />
+    <Column id=tip_rate title="Tip rate" fmt=pct1 />
+</DataTable>
+
+## Definitions and caveats
+
+- **Fare per mile** = `sum(fare_amount) / sum(trip_distance)` over trips with distance above zero.
+  Zero-distance trips are valid trips but have no meaningful per-mile price, so they are excluded here.
+- **Tip rate** = `sum(tip_amount) / sum(fare_amount)` over **credit-card trips with a positive fare**.
+  Cash tips are not recorded, so cash trips are left out rather than counted as zero tips.
+- Both are **ratios of sums**: long trips weigh more, and short trips with extreme per-trip ratios
+  do not distort the figure.
+- With only a few months in the window, a change between two points is not a trend.
