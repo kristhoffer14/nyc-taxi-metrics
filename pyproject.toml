@@ -1,0 +1,13 @@
+# Tool configuration only; this project is not packaged.
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["dbt/target", "dbt/dbt_packages", "dbt/logs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "PTH"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"

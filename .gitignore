@@ -229,3 +229,8 @@ dbt_packages/
 logs/
 node_modules/
 .claude/settings.local.json
+# Raw downloads and partial files (committed fixtures are the only exception)
+*.parquet
+!tests/fixtures/*.parquet
+*.part
+dbt/.user.yml
