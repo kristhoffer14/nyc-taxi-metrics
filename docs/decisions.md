@@ -34,3 +34,43 @@ The singular test `assert_fct_trips_matches_staging` compares per-month row coun
 - *Compare row counts to decide what to rebuild:* misses rule changes that keep the
   count the same, and needs a scan of staging on every run.
 - *Hash only the variables:* misses edits to the rule SQL.
+
+## Dashboard tool: Evidence (open-source build), reading Parquet
+
+**Decision.** The dashboard is an Evidence project in `dashboard/`, built to static HTML with
+`npm run build:strict`. The marts are exported to Parquet by `pipeline/export.py`, and Evidence
+reads those files through an in-memory DuckDB source (`read_parquet(...)`).
+
+**What was verified (2026-10-09).**
+- `@evidence-dev/evidence` 40.1.8 and `@evidence-dev/duckdb` 2.0.1 are the current npm releases, MIT
+  licensed and not marked deprecated. The GitHub repository is not archived.
+- The current Evidence docs centre on the managed Evidence Studio. The open-source static build
+  is documented under `legacy-docs.evidence.dev`, and the `legacy` branch of `evidence-dev/template`
+  is the open-source scaffold. Nothing states that it will stop being maintained, but the "legacy"
+  label is a risk for the long term.
+- A spike on Windows 11 with Node 24.20.0 passed: `npm install`, `npm run sources` and
+  `npm run build:strict` succeeded. The Ubuntu build is checked in M3 (CI).
+
+**Gotchas found while building.**
+- `@evidence-dev/evidence` 40.1.8 needs exactly `typescript@5.4.2` as a peer; npm otherwise picks
+  TypeScript 7 and fails to resolve. It is pinned in `dashboard/package.json`.
+- `build:strict` exits 0 even when a page query fails. `pipeline/dashboard.py` therefore scans
+  Evidence's output for `Error in ...` and fails the build.
+- `build` does not re-read the data; `sources:strict` must run first or a stale cache is used.
+- Evidence sorts a categorical x-axis by the y value unless `sort=false` is set, which reordered
+  months on the tip-rate chart. All time-ordered line charts set it.
+
+**Why Parquet instead of the `.duckdb` file.** The connector bundles `@duckdb/node-api ^1.4.x`
+while the pipeline writes DuckDB 1.5.5 files. Whether the older reader opens the newer file format
+was not verified, and Parquet avoids the question. It also keeps the dashboard independent of dbt:
+CI can build the site from the committed fixture without the Node side touching the database.
+
+**Rejected alternatives.**
+- *Python-only (Plotly or Altair with Jinja):* one toolchain and no Node, but it departs from the
+  spec's preferred tool and means writing the page layout by hand. It remains the fallback if
+  Evidence stops building.
+- *Reading the `.duckdb` file directly:* fewer steps, but depends on the unverified format
+  compatibility above.
+- *Querying `fct_trips` from the dashboard:* puts untested SQL in the pages and scans every trip
+  at build time. The dashboard reads only contract-tested marts (`fct_demand_hourly`,
+  `fct_daily_congestion`, `fct_monthly_metrics`).
