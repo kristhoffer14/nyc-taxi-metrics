@@ -90,3 +90,55 @@ Rejected rows by rule:
 |---|---|---|---|---|---|---|
 | 2024-12 | 3,587,961 | $6.13 | 22.0% | n/a | 3,186,632 | $17.01 |
 | 2025-01 | 3,328,570 | $5.75 | 22.8% | 65.6% | 2,967,151 | $14.78 |
+
+## M1 acceptance run (2026-10-09)
+
+Environment: Windows 11, PowerShell, Python 3.12.10. A fresh clone of
+`feat/m1-pipeline` at `e81ff73` into an empty directory, a new venv, then
+`pip install -r requirements-dev.txt` (duckdb 1.5.5, dbt-core 1.12.5,
+dbt-duckdb 1.11.0, requests 2.34.2, pytest 9.1.1, ruff 0.16.9).
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `python run_pipeline.py --sample` | 0 | 2 months x 3,012 rows loaded; dbt `PASS=53 WARN=0 ERROR=0 SKIP=0` |
+| 2 | `cd dbt; dbt build` | 0 | `Completed successfully`, `PASS=53 WARN=0 ERROR=0 SKIP=0` |
+| 3 | `python -m pytest` | 0 | `32 passed in 13.92s` |
+| 4 | `ruff check .` / `ruff format --check .` | 0 / 0 | `All checks passed!` / `20 files already formatted` |
+
+dbt build covers 4 view models, 3 table models, 1 incremental model, 41 data tests
+(including the raw = valid + rejected reconciliation) and 4 unit tests (reject
+rules, fare per mile, tip rate, CBD fee share). After the run, `git status` in the
+clone was empty: every output (`data/`, `dbt/target/`, logs) is git-ignored.
+
+Output excerpts:
+
+```text
+### 1. python run_pipeline.py --sample
+INFO pipeline: Sample mode: loading 2024-12, 2025-01 from ...\tests\fixtures
+INFO pipeline:   2024-12:       3012 rows  loaded
+INFO pipeline:   2025-01:       3012 rows  loaded
+Finished running 1 incremental model, 3 table models, 41 data tests, 4 unit tests, 4 view models in 0 hours 0 minutes and 3.16 seconds (3.16s).
+Done. PASS=53 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=53
+INFO pipeline: Pipeline finished: ...\data\sample.duckdb
+exit=0
+
+### 2. cd dbt; dbt build
+Finished running 1 incremental model, 3 table models, 41 data tests, 4 unit tests, 4 view models in 0 hours 0 minutes and 1.86 seconds (1.86s).
+Completed successfully
+Done. PASS=53 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=53
+exit=0
+
+### 3. python -m pytest
+============================= 32 passed in 13.92s =============================
+exit=0
+
+### 4a. ruff check .
+All checks passed!
+exit=0
+
+### 4b. ruff format --check .
+20 files already formatted
+exit=0
+```
+
+**Status: all Milestone 1 acceptance criteria met.**
