@@ -1,0 +1,56 @@
+version: 2
+
+unit_tests:
+  - name: test_reject_rules_assign_first_broken_rule
+    description: >
+      One trip per reject rule plus valid edge cases. Checks that each invalid
+      trip gets the expected reason, that rule order decides ties, and that
+      zero-distance trips and zones 264/265 stay valid.
+    model: stg_yellow_trips_classified
+    given:
+      - input: ref('stg_taxi_zones')
+        rows:
+          - {location_id: 161}
+          - {location_id: 236}
+          - {location_id: 264}
+          - {location_id: 265}
+      - input: source('raw', 'yellow_trips')
+        format: csv
+        rows: |
+          source_month,source_row,tpep_pickup_datetime,tpep_dropoff_datetime,trip_distance,fare_amount,total_amount,pulocationid,dolocationid
+          2025-01,1,2025-01-15 12:00:00,2025-01-15 12:20:00,2.5,15.0,23.0,161,236
+          2025-01,2,2025-01-15 12:00:00,2025-01-15 12:20:00,0.0,3.0,5.0,161,161
+          2025-01,3,2025-01-15 12:00:00,2025-01-15 12:20:00,2.5,15.0,23.0,264,265
+          2025-01,4,2025-01-15 12:00:00,2025-01-15 12:20:00,2.5,-15.0,23.0,161,236
+          2025-01,5,2025-01-15 12:00:00,2025-01-15 12:20:00,2.5,15.0,-23.0,161,236
+          2025-01,6,2025-01-15 12:00:00,2025-01-15 11:50:00,2.5,15.0,23.0,161,236
+          2025-01,7,2025-01-15 12:00:00,2025-01-15 12:00:00,2.5,15.0,23.0,161,236
+          2025-01,8,2025-01-15 12:00:00,2025-01-16 12:00:01,2.5,15.0,23.0,161,236
+          2025-01,9,2024-12-31 23:50:00,2025-01-01 00:10:00,2.5,15.0,23.0,161,236
+          2025-01,10,2025-01-15 12:00:00,2025-01-15 12:20:00,-1.0,15.0,23.0,161,236
+          2025-01,11,2025-01-15 12:00:00,2025-01-15 12:20:00,100.5,15.0,23.0,161,236
+          2025-01,12,2025-01-15 12:00:00,2025-01-15 12:20:00,2.5,15.0,23.0,999,236
+          2025-01,13,2025-01-15 12:00:00,2025-01-15 12:20:00,2.5,15.0,23.0,161,
+          2025-01,14,,2025-01-15 12:20:00,2.5,15.0,23.0,161,236
+          2025-01,15,2025-01-15 12:00:00,2025-01-15 11:50:00,2.5,-15.0,23.0,999,236
+          2025-01,16,2025-01-31 23:50:00,2025-02-01 00:10:00,2.5,15.0,23.0,161,236
+    expect:
+      format: csv
+      rows: |
+        trip_id,reject_reason
+        2025-01-00000001,
+        2025-01-00000002,
+        2025-01-00000003,
+        2025-01-00000004,negative_amount
+        2025-01-00000005,negative_amount
+        2025-01-00000006,non_positive_duration
+        2025-01-00000007,non_positive_duration
+        2025-01-00000008,excessive_duration
+        2025-01-00000009,pickup_outside_source_month
+        2025-01-00000010,invalid_distance
+        2025-01-00000011,invalid_distance
+        2025-01-00000012,unknown_zone
+        2025-01-00000013,unknown_zone
+        2025-01-00000014,missing_required_value
+        2025-01-00000015,negative_amount
+        2025-01-00000016,

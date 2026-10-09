@@ -1,0 +1,15 @@
+# No credentials: DuckDB is a local file. Paths are relative to the dbt/ directory
+# unless overridden; run_pipeline.py sets absolute paths and picks the target.
+#   sample (default): the committed fixture, loaded by `run_pipeline.py --sample`
+#   dev:              real TLC data, loaded by `run_pipeline.py [--start --end]`
+nyc_taxi_metrics:
+  target: "{{ env_var('NYC_TAXI_DBT_TARGET', 'sample') }}"
+  outputs:
+    sample:
+      type: duckdb
+      path: "{{ env_var('NYC_TAXI_SAMPLE_DB', '../data/sample.duckdb') }}"
+      threads: 4
+    dev:
+      type: duckdb
+      path: "{{ env_var('NYC_TAXI_DB', '../data/nyc_taxi.duckdb') }}"
+      threads: 4
