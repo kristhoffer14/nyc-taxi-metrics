@@ -27,6 +27,7 @@ order by sort_order, label
 ```sql by_hour
 select
     pickup_hour,
+    printf('%02d', cast(pickup_hour as integer)) as hour_label,
     sum(trips) as trips,
     sum(revenue_usd) as revenue_usd
 from taxi.fct_demand_hourly
@@ -35,10 +36,9 @@ group by pickup_hour
 order by pickup_hour
 ```
 
-<Grid cols=2>
-    <LineChart data={by_hour} x=pickup_hour y=trips title="Trips by pickup hour" xAxisTitle="Hour of day" xMin=0 xMax=23 yFmt=num0 />
-    <LineChart data={by_hour} x=pickup_hour y=revenue_usd title="Revenue by pickup hour (USD)" xAxisTitle="Hour of day" xMin=0 xMax=23 yFmt=usd0 />
-</Grid>
+<LineChart data={by_hour} x=hour_label xType=category sort=false y=trips title="Trips by pickup hour" xAxisTitle="Hour of day" yFmt=num0 />
+
+<LineChart data={by_hour} x=hour_label xType=category sort=false y=revenue_usd title="Revenue by pickup hour (USD)" xAxisTitle="Hour of day" yFmt=usd0 />
 
 ## By weekday
 
