@@ -1,0 +1,39 @@
+# Spec change requests
+
+Proposed clarifications to `docs/SPEC.md`. The spec is not edited directly; each
+item records the decision taken in the meantime.
+
+## SCR-1: Define revenue, fare per mile and tip rate (Milestone 1)
+
+**Gap:** Section 2 names these metrics without defining them.
+**Proposal:** Revenue = `sum(total_amount)`. Fare per mile =
+`sum(fare_amount) / sum(trip_distance)` over trips with distance > 0. Tip rate =
+`sum(tip_amount) / sum(fare_amount)` over credit-card trips with fare > 0. All
+ratios are ratios of sums.
+**Status:** Implemented as proposed (tip rate and aggregation confirmed by the
+project owner); see `docs/metrics.md`.
+
+## SCR-2: Congestion pricing start date (Milestone 1)
+
+**Gap:** Section 2 says congestion pricing "started in January 2025". Tolling began
+on 2025-01-05.
+**Proposal:** State the exact date. Monthly views treat 2025-01 as the first
+"after" month; daily views use the exact date.
+**Status:** Implemented via the dbt var `congestion_pricing_start_date`.
+
+## SCR-3: Which database `cd dbt && dbt build` targets (Milestone 1)
+
+**Gap:** The M1 criterion runs `dbt build` on its own after
+`run_pipeline.py --sample`, but sample and real data must not share one database
+(real runs would skip months already loaded from the sample).
+**Proposal:** dbt has two targets: `sample` (default, `data/sample.duckdb`) and
+`dev` (real data, `data/nyc_taxi.duckdb`). A plain `dbt build` uses the sample;
+`dbt build --target dev` uses real data. `run_pipeline.py` picks the target itself.
+**Status:** Implemented.
+
+## SCR-4: Pickup-month rule checks pickup only (Milestone 1)
+
+**Gap:** Section 3 lists "timestamps outside the file's month" as a quality issue.
+**Proposal:** Reject a trip when its pickup is outside the file's month. A dropoff
+in the next month is valid (trips that cross midnight on the last day).
+**Status:** Implemented as rule `pickup_outside_source_month`.
