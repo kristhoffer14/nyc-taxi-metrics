@@ -40,3 +40,14 @@ SPEC.md (section 2).
 in the next month is valid (trips that cross midnight on the last day).
 **Status:** Implemented as rule `pickup_outside_source_month`. Incorporated into SPEC.md
 (section 3).
+
+## SCR-5: CI scope and the public site (Milestone 3)
+
+**Gap:** Section 5 (CI) lists ruff, pytest, `run_pipeline.py --sample` and `dbt build`; it does not
+mention the dashboard build, and the spec has no place for publishing the site. Section 7 names
+`dashboard/build/index.html` for `--sample`, but real-data and published sites need their own folders.
+**Proposal:** CI also builds the dashboard from the sample and from the committed aggregates in
+`dashboard/published-data/`. A separate workflow publishes the real-data site to GitHub Pages on
+pushes to `main`, using only the built-in `GITHUB_TOKEN`. Output folders: `build/` (sample),
+`build-real/` (real run), `build-published/` (committed aggregates).
+**Status:** Implemented; see "Publishing the dashboard" in `docs/decisions.md`.

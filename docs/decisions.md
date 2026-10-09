@@ -105,16 +105,161 @@ export just before the Evidence build. All of these are ignored by `dashboard/.g
 - *Alternative rejected:* a source query that picks the folder at build time. Evidence source SQL
   has no access to build-time variables, so a fixed `active/` folder is the simplest option.
 
-## Deferred to Milestone 3: error matcher and `npm ci` on every build
+## The dashboard build checks its result and installs npm packages only when needed
 
-**Finding (review of `feat/m2-dashboard`).** `pipeline/dashboard.py` detects page failures by
-scanning Evidence's output for the text `Error in `, and runs `npm ci` on every build.
+Both items were deferred from Milestone 2 (review of `feat/m2-dashboard`).
 
-**Decision.** Not changed in M2; revisit in M3 together with the CI workflow.
-- The text match depends on Evidence's wording and could miss a differently worded failure or match
-  unrelated output. It has caught real failures so far (for example a `printf` type error on the hour
-  charts). A sturdier check, such as asserting that every expected page exists in the build, needs
-  the CI build to settle what "complete" means.
-- `npm ci` wipes and reinstalls `node_modules` each time, which is slow locally but gives a clean,
-  lockfile-exact install. CI wants exactly that, so the right split (install once locally, `npm ci`
-  in CI) is decided when the workflow is written.
+**Error matcher.** `run_npm` still scans Evidence's output for `Error in `, which caught real
+failures (for example a `printf` type error on the hour charts), but that depends on Evidence's
+wording. After the build, `check_site` now also requires every page in `EXPECTED_PAGES`
+(`index`, `demand`, `fares`, `congestion`) to exist and to contain no `Error in ` text. A failure
+worded differently, or a page that silently did not build, still fails the build and nothing is
+moved to the output folder. The list has to be updated when a page is added.
+
+**`npm ci`.** `npm ci` deletes and reinstalls `node_modules`, which is slow. After a successful
+install the build stores the SHA-256 of `package-lock.json` in `node_modules/.lockfile-hash`, and
+later local builds skip the install while the hash is unchanged. `--force-install` overrides it.
+When the `CI` environment variable is `true` (GitHub Actions sets it) the install always runs, so
+CI keeps the clean, lockfile-exact install.
+
+**Rejected alternatives.**
+- *Always run `npm ci`:* correct, but adds minutes to every local build.
+- *Skip whenever `node_modules` exists:* misses a changed lockfile and gives a stale install.
+- *Compare file modification times:* unreliable after a git checkout.
+- *Only check the pages, drop the text scan:* the scan reports the failing query by name, which
+  the page check cannot.
+
+## Why DuckDB, and why not Spark or a warehouse
+
+**Decision.** The engine is DuckDB, driven by dbt-duckdb, in one local file per dataset.
+
+**Why.** The design priorities are correctness, testability, clarity and reproducibility; scale and
+cloud services are out of scope (SPEC section 1). The real window of 12 months is 44.9 million
+rows. It loads into a 2.7 GB file and `dbt build` took 265 s on the development machine, so a
+single process is enough. DuckDB needs no server, account or credentials, reads Parquet directly,
+and CI runs the same engine as the development machine.
+
+**Consequences.** One writer at a time: the dashboard export has to open the file after dbt
+has finished (the export runs dbt in a child process for this reason). A shared, concurrent
+warehouse would need a different adapter.
+
+**Rejected alternatives.**
+- *Spark:* the cluster or local JVM setup is far more than 45 million rows need, it slows the
+  test loop and CI, and it adds nothing to the correctness goals.
+- *PostgreSQL:* needs a server in development and CI; loading Parquet is less direct.
+- *BigQuery, Snowflake and other cloud warehouses:* need accounts and credentials, which the
+  constraints forbid.
+- *pandas only:* no declarative models, tests, contracts or lineage.
+
+## dbt for every transformation
+
+**Decision.** All logic after the raw load is dbt SQL: staging views, mart tables, contracts on
+every mart, data tests, unit tests for the fare, tip and invalid-trip rules, and a singular test
+that raw rows equal valid plus rejected rows.
+
+**Why.** Each business rule is stated once, in one place, with a test beside it, and the lineage
+is generated. Rejected trips are kept in `stg_yellow_trips_rejected` with the first rule they
+broke, so the cleaning is auditable and the counts reconcile instead of rows disappearing. The
+metric and rule definitions the spec left open are in `docs/spec-change-requests.md` (SCR-1 to
+SCR-4).
+
+**Rejected alternatives.** *Plain SQL scripts run from Python:* no dependency graph, no tests or
+contracts for free. *Filtering in the loader:* hides what was removed and cannot be tested in SQL.
+
+## Sample and real data never share a database
+
+**Decision.** dbt has two targets: `sample` (default, `data/sample.duckdb`, built from the
+committed fixture) and `dev` (`data/nyc_taxi.duckdb`, real data). `run_pipeline.py` chooses the
+target itself; a plain `dbt build` uses the sample.
+
+**Why.** A real run skips months that are already loaded, so one shared file would let sample rows
+mask real months, or the other way round. The SPEC's M1 check runs `dbt build` on its own after
+`--sample`, which only works if the default target is the sample (SCR-3).
+
+## Metrics are ratios of sums
+
+**Decision.** Fare per mile is `sum(fare_amount) / sum(trip_distance)` and tip rate is
+`sum(tip_amount) / sum(fare_amount)` on credit-card trips, never an average of per-trip ratios.
+
+**Why.** Per-trip ratios are dominated by very short or very cheap trips. The ratio of sums answers
+"how much do riders pay per mile" and can be recomputed from totals. Tip rate excludes cash trips
+because cash tips are not recorded (SCR-1; `docs/metrics.md`).
+
+## CI: two jobs, pinned versions, no cache for dbt
+
+**Decision.** `.github/workflows/ci.yml` runs on pull requests only, with `contents: read`, no
+secrets and a `concurrency` group that cancels superseded runs.
+- Job `python`: `ruff check`, `ruff format --check`, `pytest`, `run_pipeline.py --sample`,
+  `dbt build`.
+- Job `dashboard`: `build_dashboard.py --sample` (export, `npm ci`, strict Evidence build), a check
+  that every page exists, then `build_dashboard.py --published` with the same page check and a check
+  that the Pages base path is in the output.
+- The runner image is `ubuntu-24.04`, not `latest`. Every action is pinned to a full commit SHA with
+  its version in a comment, and Python (3.12) and Node (22) are pinned. pip and npm caches are
+  keyed on the requirement files and the lockfile; Python dependencies are pinned in
+  `requirements*.txt`.
+
+**Why two jobs.** A lint or test failure and a dashboard failure show up separately, and the two run
+in parallel. Node is installed only where it is needed.
+
+**Why no dbt or DuckDB cache.** The sample build takes about ten seconds; a cache adds a way to run
+against stale state for no gain.
+
+**Consequences.** Node 22 was chosen as an LTS line while development uses 24; the lockfile is the
+same, and the CI run is the evidence that 22 builds. Updating a pinned SHA is a manual step
+(Dependabot is not enabled).
+
+## Publishing the dashboard: committed aggregates and GitHub Pages
+
+**Problem.** The README and the live site should show the real 12-month data, but CI only has the
+2-month fixture, and the raw trips (725 MB) are never committed.
+
+**Decision.** The three dashboard marts (`fct_monthly_metrics`, `fct_demand_hourly`,
+`fct_daily_congestion`) are exported by `python build_dashboard.py --publish-data` into
+`dashboard/published-data/` (about 150 KB) with a `metadata.json` giving the data window, the
+generation date, the row counts and the valid-trip total. They hold aggregates only: no trip rows,
+timestamps, locations or per-trip amounts. `.github/workflows/pages.yml` builds the site from those
+files (`build_dashboard.py --published`, with Evidence's base path set to `/nyc-taxi-metrics`) and
+deploys it with the official Pages actions on every push to `main`. The workflow uses only the
+built-in `GITHUB_TOKEN`: workflow permissions are empty by default, the build job has
+`contents: read`, and the deploy job has `pages: write` and `id-token: write`. It never runs on pull
+requests. Repository Settings -> Pages -> Source must be set to GitHub Actions once, by the owner.
+
+**What the tests guard.** `tests/test_published_data.py` checks that each file has exactly the
+documented aggregate columns, that no column name looks like a trip-level field, that row counts
+stay at aggregate scale, that the three files reconcile with each other, that `metadata.json`
+matches the files, and (in the slow suite) that the column names and types equal the dbt marts
+built from the sample.
+
+**Limitation: stale values are not detected.** The schema test only notices a change in column
+names or types. If a staging rule, a metric definition or the source data changes without changing
+the columns, the committed Parquet keeps the old numbers and every test still passes. Nothing in CI
+recomputes them, because CI does not have the raw data. The project only makes the age visible:
+`metadata.json` records the window and the generation date, and the README states them. The
+refresh is a manual step, to be run after any change to a model or rule and after extending the
+window:
+
+```powershell
+python run_pipeline.py                      # real data into data/nyc_taxi.duckdb, dbt build
+python build_dashboard.py --publish-data    # rewrite dashboard/published-data/
+python scripts/compute_findings.py          # re-check the figures quoted in the README
+python build_dashboard.py                   # real-data site for new screenshots in docs/img/
+```
+
+then commit the changed files and update the dates in the README.
+
+**Rejected alternatives.**
+- *Publish a locally built site (for example a `gh-pages` branch):* nothing data-like in `main`, but
+  the site cannot be reproduced from the repository, can drift from the code, and puts megabytes of
+  generated files in git history.
+- *Pages shows only the sample:* no data to commit, but the public site would show two months and
+  the findings could not be explored.
+- *Commit the built site:* same history cost as the first option, and a build artifact in `main`.
+- *Recompute the marts in CI from the raw files:* would remove the staleness problem, but needs a
+  725 MB download and several minutes of dbt on each run, and depends on the TLC servers being up.
+- *Commit `fct_trips` or any trip-level data:* too large, and contrary to the rule that raw data is
+  never committed.
+
+**Attribution.** Every dashboard page and the README credit "NYC TLC Trip Record Data" with a link
+to the TLC page. The TLC page was read on 2026-10-09: it says the trip data was not created by the
+TLC and has no endorsement wording, so no endorsement statement is made here.
