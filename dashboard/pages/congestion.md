@@ -77,6 +77,10 @@ order by is_congestion_pricing_month
     <Column id=avg_fare_usd title="Average fare (USD)" fmt=usd2 />
 </DataTable>
 
+**Descriptive, not causal, and not season-adjusted:** "Before" is July to December and "After" is
+January to June, so the two periods differ in season as well as in tolling. July and August, the
+lowest months of the year, are in "Before".
+
 The table works by month, so **2025-01 counts as an "After" month although its first four days
 (2025-01-01 to 2025-01-04) were before tolling began**. Those four days carry no fee and are mixed
 into the "After" figures; the daily charts below use the exact date.
