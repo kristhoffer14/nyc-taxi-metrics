@@ -66,11 +66,8 @@ def test_main_reports_a_database_without_the_marts(tmp_path, caplog):
 
 
 def test_main_skip_build_exports_without_running_npm(marts_db, tmp_path, monkeypatch):
-    out_dir = tmp_path / "parquet"
-    real_export = export.export_dashboard_tables
-    monkeypatch.setattr(
-        dashboard.export, "export_dashboard_tables", lambda db: real_export(db, out_dir)
-    )
+    monkeypatch.setattr(dashboard.config, "DASHBOARD_DIR", tmp_path / "dashboard")
+    out_dir = tmp_path / "dashboard" / "parquet" / "real"
     monkeypatch.setattr(dashboard, "run_npm", lambda *args: pytest.fail("npm must not run"))
 
     assert dashboard.main(["--db", str(marts_db), "--skip-build"]) == 0
@@ -117,11 +114,8 @@ def test_run_npm_fails_on_nonzero_exit_or_evidence_errors(monkeypatch, lines, re
 def test_main_sample_bootstraps_the_database_then_exports(tmp_path, monkeypatch):
     """Fresh clone: no database exists, so the pipeline runs dbt and the export must still work."""
     db = tmp_path / "sample.duckdb"
-    out_dir = tmp_path / "parquet"
-    real_export = export.export_dashboard_tables
-    monkeypatch.setattr(
-        dashboard.export, "export_dashboard_tables", lambda path: real_export(path, out_dir)
-    )
+    monkeypatch.setattr(dashboard.config, "DASHBOARD_DIR", tmp_path / "dashboard")
+    out_dir = tmp_path / "dashboard" / "parquet" / "sample"
 
     assert dashboard.main(["--sample", "--db", str(db), "--skip-build"]) == 0
 
@@ -131,7 +125,7 @@ def test_main_sample_bootstraps_the_database_then_exports(tmp_path, monkeypatch)
 
 
 def test_main_does_not_blame_dbt_for_unrelated_export_errors(marts_db, monkeypatch, caplog):
-    def fail(path):
+    def fail(path, out_dir):
         raise duckdb.IOException("disk full")
 
     monkeypatch.setattr(dashboard.export, "export_dashboard_tables", fail)
@@ -140,3 +134,59 @@ def test_main_does_not_blame_dbt_for_unrelated_export_errors(marts_db, monkeypat
 
     assert "disk full" in caplog.text
     assert "dbt build" not in caplog.text
+
+
+def test_sample_and_real_runs_use_separate_folders(tmp_path, monkeypatch):
+    monkeypatch.setattr(dashboard.config, "DASHBOARD_DIR", tmp_path)
+
+    sample, real = dashboard.outputs_for(True), dashboard.outputs_for(False)
+
+    assert sample.parquet_dir != real.parquet_dir
+    assert sample.site_dir != real.site_dir
+    assert sample.active_dir == real.active_dir  # the pages read one fixed folder
+
+
+def test_a_sample_run_leaves_the_real_export_and_site_untouched(marts_db, tmp_path, monkeypatch):
+    monkeypatch.setattr(dashboard.config, "DASHBOARD_DIR", tmp_path)
+    real = dashboard.outputs_for(False)
+    real.parquet_dir.mkdir(parents=True)
+    (real.parquet_dir / "fct_monthly_metrics.parquet").write_text("real data")
+    real.site_dir.mkdir(parents=True)
+    (real.site_dir / "index.html").write_text("real site")
+
+    def fake_npm(*args):
+        (tmp_path / "build").mkdir(exist_ok=True)
+        (tmp_path / "build" / "index.html").write_text("sample site")
+        return True
+
+    monkeypatch.setattr(dashboard, "run_npm", fake_npm)
+
+    assert dashboard.main(["--sample", "--db", str(marts_db)]) == 0
+
+    assert (real.parquet_dir / "fct_monthly_metrics.parquet").read_text() == "real data"
+    assert (real.site_dir / "index.html").read_text() == "real site"
+    assert (tmp_path / "build" / "index.html").read_text() == "sample site"
+
+
+def test_a_real_run_moves_its_site_to_build_real_and_clears_stale_pages(
+    marts_db, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(dashboard.config, "DASHBOARD_DIR", tmp_path)
+    (tmp_path / "build").mkdir()
+    (tmp_path / "build" / "sample_only.html").write_text("left by a sample run")
+
+    def fake_npm(*args):
+        (tmp_path / "build").mkdir(exist_ok=True)
+        (tmp_path / "build" / "index.html").write_text("real site")
+        return True
+
+    monkeypatch.setattr(dashboard, "run_npm", fake_npm)
+
+    assert dashboard.main(["--db", str(marts_db)]) == 0
+
+    assert sorted(f.name for f in (tmp_path / "build-real").iterdir()) == ["index.html"]
+    assert not (tmp_path / "build").exists()
+    active = tmp_path / "parquet" / "active"
+    assert sorted(f.name for f in active.iterdir()) == sorted(
+        f"{table}.parquet" for table in export.DASHBOARD_TABLES
+    )

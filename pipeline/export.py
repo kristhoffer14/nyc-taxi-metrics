@@ -7,8 +7,6 @@ from pathlib import Path
 
 import duckdb
 
-from pipeline import config
-
 log = logging.getLogger(__name__)
 
 # Marts the dashboard reads, with a stable sort so the files are deterministic.
@@ -19,9 +17,7 @@ DASHBOARD_TABLES = {
 }
 
 
-def export_dashboard_tables(
-    db_path: Path, out_dir: Path = config.DASHBOARD_PARQUET_DIR
-) -> dict[str, int]:
+def export_dashboard_tables(db_path: Path, out_dir: Path) -> dict[str, int]:
     """Write each dashboard mart to out_dir/<table>.parquet; return rows written per table."""
     out_dir.mkdir(parents=True, exist_ok=True)
     rows: dict[str, int] = {}

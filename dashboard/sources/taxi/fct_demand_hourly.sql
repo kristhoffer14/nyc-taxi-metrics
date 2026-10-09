@@ -1,1 +1,1 @@
-select * from read_parquet('parquet/fct_demand_hourly.parquet')
+select * from read_parquet('parquet/active/fct_demand_hourly.parquet')

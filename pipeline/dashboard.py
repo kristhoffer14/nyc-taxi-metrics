@@ -7,6 +7,7 @@ import logging
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import duckdb
@@ -17,12 +18,55 @@ log = logging.getLogger("pipeline")
 
 EVIDENCE_ERROR_MARKER = "Error in "
 
+# The pages always read `parquet/active/`; each run copies its own export there first.
+ACTIVE_PARQUET = "active"
+
+
+@dataclass(frozen=True)
+class Outputs:
+    """Where one kind of run (sample or real) keeps its Parquet export and built site."""
+
+    parquet_dir: Path
+    site_dir: Path
+    active_dir: Path
+    scratch_site_dir: Path  # Evidence always writes its site here
+
+
+def outputs_for(sample: bool) -> Outputs:
+    """Sample and real runs never share a folder, so a sample run cannot overwrite real data.
+
+    The sample site stays in `build/` (SPEC section 7 names it); the real site is moved to
+    `build-real/` after the build.
+    """
+    root = config.DASHBOARD_DIR
+    scratch = root / "build"
+    return Outputs(
+        parquet_dir=root / "parquet" / ("sample" if sample else "real"),
+        site_dir=scratch if sample else root / "build-real",
+        active_dir=root / "parquet" / ACTIVE_PARQUET,
+        scratch_site_dir=scratch,
+    )
+
+
+def stage_parquet(outputs: Outputs) -> None:
+    """Replace the folder the pages read with this run's export."""
+    shutil.rmtree(outputs.active_dir, ignore_errors=True)
+    shutil.copytree(outputs.parquet_dir, outputs.active_dir)
+
+
+def publish_site(outputs: Outputs) -> None:
+    """Move Evidence's site to this run's folder (a no-op for the sample run)."""
+    if outputs.site_dir == outputs.scratch_site_dir:
+        return
+    shutil.rmtree(outputs.site_dir, ignore_errors=True)
+    shutil.move(outputs.scratch_site_dir, outputs.site_dir)
+
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="build_dashboard.py",
         description="Export the dashboard marts to Parquet and build the static site "
-        "into dashboard/build/.",
+        "into dashboard/build/ (--sample) or dashboard/build-real/.",
     )
     parser.add_argument(
         "--sample",
@@ -83,8 +127,9 @@ def main(argv: list[str] | None = None) -> int:
         if cli.main(["--sample", "--db", str(db_path)]) != 0:
             return 1
 
+    outputs = outputs_for(args.sample)
     try:
-        export.export_dashboard_tables(db_path)
+        export.export_dashboard_tables(db_path, outputs.parquet_dir)
     except duckdb.CatalogException as exc:
         log.error(
             "The marts are missing from %s (%s). Has `dbt build` been run on it?", db_path, exc
@@ -96,10 +141,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.skip_build:
         return 0
+    stage_parquet(outputs)
+    # Evidence copies into build/ without clearing it, so drop any earlier run's pages first.
+    shutil.rmtree(outputs.scratch_site_dir, ignore_errors=True)
     # `sources` re-reads the Parquet files; `build` alone would reuse a stale cache.
     steps = (("ci",), ("run", "sources:strict"), ("run", "build:strict"))
     if not all(run_npm(*step) for step in steps):
         log.error("Dashboard build failed")
         return 1
-    log.info("Dashboard built: %s", config.DASHBOARD_DIR / "build")
+    publish_site(outputs)
+    log.info("Dashboard built: %s", outputs.site_dir)
     return 0

@@ -77,3 +77,27 @@ CI can build the site from the committed fixture without the Node side touching 
 - *Querying `fct_trips` from the dashboard:* puts untested SQL in the pages and scans every trip
   at build time. The dashboard reads only contract-tested marts (`fct_demand_hourly`,
   `fct_daily_congestion`, `fct_monthly_metrics`).
+
+## Dashboard output folders: sample and real runs are kept apart
+
+**Decision.** `build_dashboard.py` writes each kind of run to its own folders, so `--sample` can
+never overwrite the real-data dashboard:
+
+| | `--sample` | real (no flag) |
+|---|---|---|
+| Parquet export | `dashboard/parquet/sample/` | `dashboard/parquet/real/` |
+| Built site | `dashboard/build/` | `dashboard/build-real/` |
+
+The pages read one fixed folder, `dashboard/parquet/active/`, which each run refills from its own
+export just before the Evidence build. All of these are ignored by `dashboard/.gitignore`.
+
+**Why this shape.**
+- Evidence's CLI always copies its site to `./build` and ignores `EVIDENCE_BUILD_DIR` for that last
+  step, so the real site is moved to `build-real/` by `pipeline/dashboard.py` after the build.
+- The sample site stays in `dashboard/build/` because `docs/SPEC.md` (section 7) names
+  `dashboard/build/index.html` for `--sample`. The spec is not edited here.
+- `build/` is wiped before each build: Evidence copies into it without clearing, so pages from an
+  earlier run would otherwise leak into the next one. A real run therefore removes any sample site
+  in `build/`; that site is cheap to rebuild.
+- *Alternative rejected:* a source query that picks the folder at build time. Evidence source SQL
+  has no access to build-time variables, so a fixed `active/` folder is the simplest option.
