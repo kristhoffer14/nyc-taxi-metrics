@@ -1,9 +1,11 @@
-"""Run dbt in-process against the DuckDB file the pipeline just loaded."""
+"""Run dbt in a child process against the DuckDB file the pipeline just loaded."""
 
 from __future__ import annotations
 
 import logging
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 from pipeline import config
@@ -15,11 +17,12 @@ DB_ENV_VAR = {"sample": "NYC_TAXI_SAMPLE_DB", "dev": "NYC_TAXI_DB"}
 
 
 def run_dbt_build(target: str, db_path: Path, project_dir: Path = config.DBT_DIR) -> bool:
-    """Run `dbt build` for target with its database at db_path; return success."""
-    # Imported lazily: dbt is slow to import and not needed by the loader tests.
-    from dbt.cli.main import dbtRunner
+    """Run `dbt build` for target with its database at db_path; return success.
 
-    os.environ[DB_ENV_VAR[target]] = str(db_path.resolve())
+    dbt runs in a child process: in-process, its adapter keeps a read-write connection to
+    the DuckDB file open after the build, which blocks later read-only connections.
+    """
+    env = {**os.environ, DB_ENV_VAR[target]: str(db_path.resolve())}
     args = [
         "build",
         "--project-dir",
@@ -30,7 +33,5 @@ def run_dbt_build(target: str, db_path: Path, project_dir: Path = config.DBT_DIR
         target,
     ]
     log.info("Running dbt %s", " ".join(args))
-    result = dbtRunner().invoke(args)
-    if result.exception is not None:
-        log.error("dbt build raised: %s", result.exception)
-    return bool(result.success)
+    command = [sys.executable, "-c", "from dbt.cli.main import cli; cli()", *args]
+    return subprocess.run(command, env=env, check=False).returncode == 0

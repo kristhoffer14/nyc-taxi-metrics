@@ -85,8 +85,13 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         export.export_dashboard_tables(db_path)
+    except duckdb.CatalogException as exc:
+        log.error(
+            "The marts are missing from %s (%s). Has `dbt build` been run on it?", db_path, exc
+        )
+        return 1
     except duckdb.Error as exc:
-        log.error("Export failed: %s. Has `dbt build` been run on %s?", exc, db_path)
+        log.error("Export from %s failed: %s", db_path, exc)
         return 1
 
     if args.skip_build:

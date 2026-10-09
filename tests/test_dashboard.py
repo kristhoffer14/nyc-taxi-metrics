@@ -112,3 +112,31 @@ def test_run_npm_fails_on_nonzero_exit_or_evidence_errors(monkeypatch, lines, re
     )
 
     assert dashboard.run_npm("run", "build:strict") is expected
+
+
+def test_main_sample_bootstraps_the_database_then_exports(tmp_path, monkeypatch):
+    """Fresh clone: no database exists, so the pipeline runs dbt and the export must still work."""
+    db = tmp_path / "sample.duckdb"
+    out_dir = tmp_path / "parquet"
+    real_export = export.export_dashboard_tables
+    monkeypatch.setattr(
+        dashboard.export, "export_dashboard_tables", lambda path: real_export(path, out_dir)
+    )
+
+    assert dashboard.main(["--sample", "--db", str(db), "--skip-build"]) == 0
+
+    assert sorted(f.name for f in out_dir.iterdir()) == sorted(
+        f"{table}.parquet" for table in export.DASHBOARD_TABLES
+    )
+
+
+def test_main_does_not_blame_dbt_for_unrelated_export_errors(marts_db, monkeypatch, caplog):
+    def fail(path):
+        raise duckdb.IOException("disk full")
+
+    monkeypatch.setattr(dashboard.export, "export_dashboard_tables", fail)
+
+    assert dashboard.main(["--db", str(marts_db), "--skip-build"]) == 1
+
+    assert "disk full" in caplog.text
+    assert "dbt build" not in caplog.text
