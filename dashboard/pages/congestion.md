@@ -17,8 +17,7 @@ select min(year_month) as first_month, max(year_month) as last_month
 from taxi.fct_monthly_metrics
 ```
 
-Valid trips only. Tolling began on **2025-01-05**. Monthly views treat 2025-01 as the first "after" month
-(it includes four days without the fee); daily views use the exact date.
+Valid trips only. Tolling began on **2025-01-05**; the daily charts use that exact date.
 
 **Data window:** <Value data={window} column=first_month /> to <Value data={window} column=last_month />
 
@@ -77,6 +76,10 @@ order by is_congestion_pricing_month
     <Column id=avg_monthly_manhattan_trips title="Manhattan pickups per month" fmt=num0 />
     <Column id=avg_fare_usd title="Average fare (USD)" fmt=usd2 />
 </DataTable>
+
+The table works by month, so **2025-01 counts as an "After" month although its first four days
+(2025-01-01 to 2025-01-04) were before tolling began**. Those four days carry no fee and are mixed
+into the "After" figures; the daily charts below use the exact date.
 
 <LineChart data={daily} x=day xType=category sort=false y=manhattan_pickup_trips title="Daily Manhattan pickups" yFmt=num0>
     <ReferenceLine x="2025-01-05" label="Tolling starts 2025-01-05" hideValue=true />
