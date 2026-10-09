@@ -104,8 +104,10 @@ Trips per month are 9.0% higher after and the average fare 3.4% lower. **This is
 of congestion pricing.** The "before" months are July to December and the "after" months are
 January to June, so the two periods also differ in season. July and August, the two lowest months
 (2.6 and 2.5 million Manhattan pickups), sit in the "before" period, which alone lowers its average.
-The data has no year-earlier months to compare with, and weather, fare changes and other
-events are not controlled for.
+The table works by month, so 2025-01 counts as "after" although its first four days
+(2025-01-01 to 2025-01-04) were before tolling began; those days carry no fee and are mixed into
+the "after" figures. This project's 12-month window has no year-earlier months to compare with,
+and weather, fare changes and other events are not controlled for.
 
 ## Design decisions
 
