@@ -53,3 +53,40 @@ These drive the staging rules documented in `dbt/models/staging/_staging.yml`.
 The remaining months in the default window were not downloaded in M1. The loader matches
 columns by name, case-insensitively, and fills missing optional columns with NULL, so
 schema drift fails loudly only if a required column disappears.
+
+## Real-data ingestion check (2026-10-09)
+
+`python run_pipeline.py --start 2024-12 --end 2025-01`, run three times against
+`data/nyc_taxi.duckdb` (dbt target `dev`).
+
+| Run | Flags | Exit | Time | Load result | dbt build |
+|---|---|---|---|---|---|
+| 1 | (none) | 0 | 28 s | both months loaded | PASS=53 ERROR=0 |
+| 2 | (none) | 0 | 15 s | both months skipped (already loaded) | PASS=53 ERROR=0 |
+| 3 | `--force` | 0 | 30 s | files re-downloaded, both months replaced | PASS=53 ERROR=0 |
+
+Row counts were identical after runs 2 and 3 (no duplicates), and raw counts equal
+the source files exactly:
+
+| Month | Raw | Valid (stg / fct_trips) | Rejected | Raw = valid + rejected |
+|---|---|---|---|---|
+| 2024-12 | 3,668,371 | 3,587,961 | 80,410 | yes |
+| 2025-01 | 3,475,226 | 3,328,570 | 146,656 | yes |
+
+Rejected rows by rule:
+
+| Rule | 2024-12 | 2025-01 |
+|---|---|---|
+| negative_amount | 79,020 | 144,439 |
+| non_positive_duration | 1,217 | 2,040 |
+| invalid_distance | 121 | 137 |
+| pickup_outside_source_month | 34 | 22 |
+| excessive_duration | 18 | 18 |
+| unknown_zone, missing_required_value | 0 | 0 |
+
+`fct_monthly_metrics` on real data (a smoke check; findings belong to M2/M3):
+
+| Month | Trips | Fare per mile | Tip rate | CBD fee share | Manhattan pickups | Manhattan avg fare |
+|---|---|---|---|---|---|---|
+| 2024-12 | 3,587,961 | $6.13 | 22.0% | n/a | 3,186,632 | $17.01 |
+| 2025-01 | 3,328,570 | $5.75 | 22.8% | 65.6% | 2,967,151 | $14.78 |
